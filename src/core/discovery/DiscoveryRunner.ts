@@ -1,6 +1,14 @@
 import { HtmlParser } from "@/src/core/discovery/HtmlParser";
 import { WebsiteFetcher } from "@/src/core/discovery/WebsiteFetcher";
+import { IdentityInterpreter } from "@/src/core/interpreter/IdentityInterpreter";
 import type { Observation } from "@/src/types/observation";
+import type { ResolvedIdentity } from "@/src/types/resolved-identity";
+
+/** Result of a full discovery run including raw observations and interpreted identity. */
+export interface DiscoveryRunResult {
+  observations: Observation[];
+  resolvedIdentity: ResolvedIdentity;
+}
 
 /** Structured log payload emitted at each stage of a discovery run. */
 interface DiscoveryLogEntry {
@@ -18,43 +26,48 @@ interface DiscoveryLogEntry {
 }
 
 /**
- * Orchestrates the raw discovery pipeline for a single website URL.
+ * Orchestrates the discovery pipeline for a single website URL.
  *
- * DiscoveryRunner coordinates download and parsing only. It fetches HTML,
- * converts it into {@link Observation} records, and returns them unchanged.
+ * DiscoveryRunner coordinates download, parsing, and identity interpretation.
  * It does not build evidence, calculate Ions, or invoke any AI models.
  *
  * Pipeline:
  *
  * ```
- * URL → WebsiteFetcher.fetchHtml → HtmlParser.parse → Observation[]
+ * URL → WebsiteFetcher.fetchHtml → HtmlParser.parse → IdentityInterpreter.interpret
  * ```
  */
 export class DiscoveryRunner {
   private readonly fetcher: WebsiteFetcher;
   private readonly parser: HtmlParser;
+  private readonly identityInterpreter: IdentityInterpreter;
 
   /**
-   * Creates a runner with the given fetch and parse collaborators.
+   * Creates a runner with the given pipeline collaborators.
    *
-   * Defaults to fresh {@link WebsiteFetcher} and {@link HtmlParser} instances
-   * when none are supplied.
+   * Defaults to fresh {@link WebsiteFetcher}, {@link HtmlParser}, and
+   * {@link IdentityInterpreter} instances when none are supplied.
    */
-  constructor(fetcher?: WebsiteFetcher, parser?: HtmlParser) {
+  constructor(
+    fetcher?: WebsiteFetcher,
+    parser?: HtmlParser,
+    identityInterpreter?: IdentityInterpreter,
+  ) {
     this.fetcher = fetcher ?? new WebsiteFetcher();
     this.parser = parser ?? new HtmlParser();
+    this.identityInterpreter = identityInterpreter ?? new IdentityInterpreter();
   }
 
   /**
-   * Runs raw discovery for the given website URL.
+   * Runs discovery for the given website URL.
    *
-   * Downloads the page HTML, parses it into observations, and returns the
-   * collected results. Emits structured logs at each pipeline stage.
+   * Downloads the page HTML, parses it into observations, interprets identity,
+   * and returns both results. Emits structured logs at each pipeline stage.
    *
    * @param url - Absolute HTTP or HTTPS URL of the page to discover.
-   * @returns All observations extracted from the page HTML.
+   * @returns Observations and the interpreted identity profile.
    */
-  async run(url: string): Promise<Observation[]> {
+  async run(url: string): Promise<DiscoveryRunResult> {
     this.log("fetch_started", url);
 
     const html = await this.fetcher.fetchHtml(url);
@@ -73,7 +86,16 @@ export class DiscoveryRunner {
       totalObservations: observations.length,
     });
 
-    return observations;
+    this.log("interpretation_started", url);
+
+    const resolvedIdentity = this.identityInterpreter.interpret(observations);
+
+    this.log("interpretation_completed", url, {
+      primaryBrand: resolvedIdentity.primaryBrand || "(unresolved)",
+      confidence: resolvedIdentity.confidence,
+    });
+
+    return { observations, resolvedIdentity };
   }
 
   /**

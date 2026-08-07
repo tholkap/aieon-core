@@ -4,6 +4,124 @@ import { type FormEvent, useState } from "react";
 
 import { runDiscovery } from "@/app/discovery/actions";
 import type { Observation } from "@/src/types/observation";
+import type { ResolvedIdentity } from "@/src/types/resolved-identity";
+
+function EmptyValue() {
+  return <span className="text-white/30">—</span>;
+}
+
+function IdentityField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <dt className="mb-1 text-xs font-medium uppercase tracking-wider text-white/50">
+        {label}
+      </dt>
+      <dd className="text-base leading-relaxed text-white">
+        {value || <EmptyValue />}
+      </dd>
+    </div>
+  );
+}
+
+function ResolvedIdentitySection({
+  identity,
+}: {
+  identity: ResolvedIdentity;
+}) {
+  return (
+    <section className="mb-12 flex w-full flex-col gap-4 text-left">
+      <h2 className="text-center text-sm font-medium uppercase tracking-wider text-white/50">
+        Resolved Identity
+      </h2>
+
+      <article className="w-full rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+        <dl className="flex flex-col gap-4">
+          <IdentityField label="Primary Brand" value={identity.primaryBrand} />
+          <IdentityField
+            label="Legal Business Name"
+            value={identity.legalBusinessName}
+          />
+          <IdentityField label="Trading Name" value={identity.tradingName} />
+          <IdentityField label="Website Title" value={identity.websiteTitle} />
+          <IdentityField label="Domain" value={identity.domain} />
+
+          <div>
+            <dt className="mb-1 text-xs font-medium uppercase tracking-wider text-white/50">
+              Candidate Names
+            </dt>
+            <dd className="text-base leading-relaxed text-white">
+              {identity.candidateNames.length > 0 ? (
+                <ul className="list-inside list-disc space-y-1">
+                  {identity.candidateNames.map((name) => (
+                    <li key={name}>{name}</li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyValue />
+              )}
+            </dd>
+          </div>
+
+          <IdentityField
+            label="Operating Country"
+            value={identity.operatingCountry}
+          />
+
+          <div>
+            <dt className="mb-1 text-xs font-medium uppercase tracking-wider text-white/50">
+              Confidence
+            </dt>
+            <dd className="font-mono text-sm text-white/80">
+              {identity.confidence}
+            </dd>
+          </div>
+
+          <div>
+            <dt className="mb-1 text-xs font-medium uppercase tracking-wider text-white/50">
+              Evidence
+            </dt>
+            <dd className="text-base leading-relaxed text-white">
+              {identity.evidence.length > 0 ? (
+                <ul className="list-inside list-disc space-y-1 font-mono text-sm text-white/80">
+                  {identity.evidence.map((id) => (
+                    <li key={id} className="break-all">
+                      {id}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyValue />
+              )}
+            </dd>
+          </div>
+
+          <div>
+            <dt className="mb-1 text-xs font-medium uppercase tracking-wider text-white/50">
+              Reasoning
+            </dt>
+            <dd className="text-base leading-relaxed text-white">
+              {identity.reasoning.length > 0 ? (
+                <ul className="list-inside list-disc space-y-2 text-sm text-white/80">
+                  {identity.reasoning.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyValue />
+              )}
+            </dd>
+          </div>
+        </dl>
+      </article>
+    </section>
+  );
+}
 
 function ObservationCard({ observation }: { observation: Observation }) {
   return (
@@ -65,6 +183,8 @@ export default function DiscoveryPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [observations, setObservations] = useState<Observation[]>([]);
+  const [resolvedIdentity, setResolvedIdentity] =
+    useState<ResolvedIdentity | null>(null);
   const [hasRun, setHasRun] = useState(false);
 
   async function handleDiscover(event: FormEvent<HTMLFormElement>) {
@@ -73,6 +193,7 @@ export default function DiscoveryPage() {
     setLoading(true);
     setError(null);
     setObservations([]);
+    setResolvedIdentity(null);
 
     const result = await runDiscovery(url);
 
@@ -82,6 +203,7 @@ export default function DiscoveryPage() {
       setError(result.error);
     } else {
       setObservations(result.observations);
+      setResolvedIdentity(result.resolvedIdentity);
     }
 
     setLoading(false);
@@ -100,8 +222,8 @@ export default function DiscoveryPage() {
           </h1>
 
           <p className="mb-12 max-w-md text-base leading-relaxed text-white/60">
-            Validate the raw discovery pipeline — fetch HTML and inspect
-            observations before any evidence or Ion processing.
+            Validate the discovery pipeline — fetch HTML, interpret identity,
+            and inspect raw observations before any evidence or Ion processing.
           </p>
 
           <form
@@ -134,7 +256,8 @@ export default function DiscoveryPage() {
                 <div className="h-full w-1/3 animate-pulse rounded-full bg-[#D4AF37]" />
               </div>
               <p className="text-sm text-white/50">
-                Fetching HTML and extracting observations…
+                Fetching HTML, extracting observations, and interpreting
+                identity…
               </p>
             </div>
           )}
@@ -146,6 +269,10 @@ export default function DiscoveryPage() {
             >
               {error}
             </div>
+          )}
+
+          {!loading && hasRun && !error && resolvedIdentity && (
+            <ResolvedIdentitySection identity={resolvedIdentity} />
           )}
 
           {!loading && observations.length > 0 && (
