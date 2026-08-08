@@ -1,168 +1,144 @@
-import { load, type CheerioAPI } from "cheerio";
+import { load, type Cheerio, type CheerioAPI } from "cheerio";
+import type { AnyNode } from "domhandler";
 
-import type { Observation, ObservationSourceType } from "@/src/types/observation";
+import type {
+  HtmlParserSourceType,
+  Observation,
+} from "@/src/types/observation";
 
-/**
- * Confidence assigned to direct, selector-based DOM reads.
- *
- * These values are not computed scores — they reflect that the extracted
- * text came verbatim from a matched element with no interpretation applied.
- */
+interface ObservationDraft {
+  pageUrl: string;
+  discoveredAt: string;
+  selector: string;
+  sourceType: HtmlParserSourceType;
+  rawValue: string | undefined;
+}
+
+interface ExtractionContext {
+  pageUrl: string;
+  discoveredAt: string;
+  observations: Observation[];
+}
+
+interface SingleExtractionRule {
+  selector: string;
+  sourceType: HtmlParserSourceType;
+  readValue: ($: CheerioAPI) => string | undefined;
+}
+
+interface IndexedExtractionRule {
+  selector: string;
+  sourceType: HtmlParserSourceType;
+  readValue: (element: Cheerio<AnyNode>) => string;
+}
+
 const DIRECT_EXTRACTION_CONFIDENCE = 1;
 
-/** CSS selector for the document title element. */
-const TITLE_SELECTOR = "title";
+const readElementText = ($element: Cheerio<AnyNode>): string => $element.text();
 
-/** CSS selector for the standard meta description tag. */
-const META_DESCRIPTION_SELECTOR = 'meta[name="description"]';
+const SINGLE_EXTRACTIONS: ReadonlyArray<SingleExtractionRule> = [
+  {
+    selector: "title",
+    sourceType: "title",
+    readValue: ($) => $("title").first().text().trim(),
+  },
+  {
+    selector: 'meta[name="description"]',
+    sourceType: "meta-description",
+    readValue: ($) => $('meta[name="description"]').first().attr("content")?.trim(),
+  },
+  {
+    selector: "h1",
+    sourceType: "h1",
+    readValue: ($) => $("h1").first().text().trim(),
+  },
+];
 
-/** CSS selector for the first top-level heading on the page. */
-const FIRST_H1_SELECTOR = "h1";
+const INDEXED_EXTRACTIONS: ReadonlyArray<IndexedExtractionRule> = [
+  { selector: "h2", sourceType: "h2", readValue: readElementText },
+  { selector: "h3", sourceType: "h3", readValue: readElementText },
+  { selector: "nav a", sourceType: "navigation-link", readValue: readElementText },
+  { selector: "footer a", sourceType: "footer-link", readValue: readElementText },
+  { selector: "button", sourceType: "button", readValue: readElementText },
+  { selector: "li", sourceType: "list-item", readValue: readElementText },
+];
 
 /**
  * Parses raw HTML into uninterpreted {@link Observation} records.
  *
- * HtmlParser is a structural extraction layer only. It loads HTML with Cheerio,
- * reads a fixed set of Version 1 selectors, and emits one observation per match.
- * It does not infer meaning, build evidence, or invoke any AI models.
- *
- * Typical pipeline:
- *
- * ```
- * WebsiteFetcher.fetchHtml(url) → HTML string → HtmlParser.parse(html, url) → Observation[]
- * ```
+ * Extraction is fully configuration-driven via {@link SINGLE_EXTRACTIONS} and
+ * {@link INDEXED_EXTRACTIONS}. Discovery performs no inference and no classification.
  */
 export class HtmlParser {
-  /**
-   * Extracts Version 1 observations from a raw HTML document.
-   *
-   * Loads the HTML string, attempts each supported selector independently,
-   * and returns every observation that produced a non-empty raw value.
-   * Missing elements are skipped silently — no placeholder observations
-   * are created.
-   *
-   * @param html - Raw HTML string, typically from {@link WebsiteFetcher.fetchHtml}.
-   * @param pageUrl - Absolute URL of the page the HTML was fetched from.
-   * @returns An array of observations, one per successfully extracted element.
-   */
   parse(html: string, pageUrl: string): Observation[] {
     const $ = load(html);
-    const discoveredAt = new Date().toISOString();
-    const observations: Observation[] = [];
+    const context: ExtractionContext = {
+      pageUrl,
+      discoveredAt: new Date().toISOString(),
+      observations: [],
+    };
 
-    this.extractTitle($, pageUrl, discoveredAt, observations);
-    this.extractMetaDescription($, pageUrl, discoveredAt, observations);
-    this.extractFirstH1($, pageUrl, discoveredAt, observations);
+    this.runExtractionPipeline($, context);
 
-    return observations;
+    return context.observations;
   }
 
-  /**
-   * Extracts the document `<title>` element when present and non-empty.
-   *
-   * The title is classified as metadata because it lives in the document
-   * head and describes the page rather than visible body content.
-   */
-  private extractTitle(
-    $: CheerioAPI,
-    pageUrl: string,
-    discoveredAt: string,
-    observations: Observation[],
-  ): void {
-    const rawValue = $(TITLE_SELECTOR).first().text().trim();
+  /** Declarative extraction pipeline — singles first, then indexed, in config order. */
+  private runExtractionPipeline($: CheerioAPI, context: ExtractionContext): void {
+    for (const rule of SINGLE_EXTRACTIONS) {
+      this.appendObservation(context.observations, {
+        pageUrl: context.pageUrl,
+        discoveredAt: context.discoveredAt,
+        selector: rule.selector,
+        sourceType: rule.sourceType,
+        rawValue: rule.readValue($),
+      });
+    }
 
-    this.appendObservationIfPresent(observations, {
-      pageUrl,
-      discoveredAt,
-      selector: TITLE_SELECTOR,
-      sourceType: "metadata",
-      rawValue,
+    for (const rule of INDEXED_EXTRACTIONS) {
+      this.extractIndexedElements($, context, rule);
+    }
+  }
+
+  private extractIndexedElements(
+    $: CheerioAPI,
+    context: ExtractionContext,
+    rule: IndexedExtractionRule,
+  ): void {
+    $(rule.selector).each((index, element) => {
+      this.appendObservation(context.observations, {
+        pageUrl: context.pageUrl,
+        discoveredAt: context.discoveredAt,
+        selector: this.createIndexedSelector(rule.selector, index),
+        sourceType: rule.sourceType,
+        rawValue: rule.readValue($(element)).trim(),
+      });
     });
   }
 
-  /**
-   * Extracts the `content` attribute of `<meta name="description">` when present.
-   *
-   * Only the standard description meta tag is considered. Alternate or duplicate
-   * description tags are ignored in Version 1.
-   */
-  private extractMetaDescription(
-    $: CheerioAPI,
-    pageUrl: string,
-    discoveredAt: string,
+  private appendObservation(
     observations: Observation[],
+    draft: ObservationDraft,
   ): void {
-    const rawValue = $(META_DESCRIPTION_SELECTOR).first().attr("content")?.trim();
-
-    this.appendObservationIfPresent(observations, {
-      pageUrl,
-      discoveredAt,
-      selector: META_DESCRIPTION_SELECTOR,
-      sourceType: "metadata",
-      rawValue,
-    });
-  }
-
-  /**
-   * Extracts the text content of the first `<h1>` element when present.
-   *
-   * Only the first matching heading is collected. Additional H1 elements
-   * on the same page are intentionally ignored in Version 1.
-   */
-  private extractFirstH1(
-    $: CheerioAPI,
-    pageUrl: string,
-    discoveredAt: string,
-    observations: Observation[],
-  ): void {
-    const rawValue = $(FIRST_H1_SELECTOR).first().text().trim();
-
-    this.appendObservationIfPresent(observations, {
-      pageUrl,
-      discoveredAt,
-      selector: FIRST_H1_SELECTOR,
-      sourceType: "heading",
-      rawValue,
-    });
-  }
-
-  /**
-   * Appends a fully populated observation when a raw value exists.
-   *
-   * Empty, whitespace-only, or absent values produce no observation.
-   * This keeps the output limited to facts actually present in the HTML.
-   */
-  private appendObservationIfPresent(
-    observations: Observation[],
-    fields: {
-      pageUrl: string;
-      discoveredAt: string;
-      selector: string;
-      sourceType: ObservationSourceType;
-      rawValue: string | undefined;
-    },
-  ): void {
-    if (!fields.rawValue) {
+    if (!draft.rawValue) {
       return;
     }
 
     observations.push({
-      id: this.createObservationId(fields.pageUrl, fields.selector),
-      pageUrl: fields.pageUrl,
-      sourceType: fields.sourceType,
-      selector: fields.selector,
-      rawValue: fields.rawValue,
+      id: this.createObservationId(draft.pageUrl, draft.selector),
+      pageUrl: draft.pageUrl,
+      sourceType: draft.sourceType,
+      selector: draft.selector,
+      rawValue: draft.rawValue,
       confidence: DIRECT_EXTRACTION_CONFIDENCE,
-      discoveredAt: fields.discoveredAt,
+      discoveredAt: draft.discoveredAt,
     });
   }
 
-  /**
-   * Builds a stable identifier for an observation within a discovery run.
-   *
-   * Combines the page URL and CSS selector so each extracted element maps
-   * to a single, reproducible id without requiring random or sequential keys.
-   */
+  private createIndexedSelector(baseSelector: string, index: number): string {
+    return `${baseSelector}@${index}`;
+  }
+
   private createObservationId(pageUrl: string, selector: string): string {
     return `${pageUrl}::${selector}`;
   }

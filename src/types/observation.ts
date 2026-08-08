@@ -1,49 +1,75 @@
 /**
  * AiEON Observation Model
  *
- * Type definitions for raw signals collected during website discovery.
- * Observations are uninterpreted facts extracted from a page — they capture
- * what was found and where, before any reasoning or evidence mapping occurs.
+ * Observations are uninterpreted facts extracted from a page — what was found
+ * and where, before any reasoning or evidence mapping occurs.
+ *
+ * Constitutional principle: observation types describe where information came
+ * from, never what the business means.
  */
 
 /**
- * Category of DOM or page surface from which an observation was extracted.
- * Describes the structural role of the source element, not its semantic meaning.
+ * Canonical structural origin of an observation.
+ *
+ * Identifies the HTML or page artifact an observation was extracted from.
+ * Structural origin only — never interpreted business meaning.
  */
 export type ObservationSourceType =
-  | "heading"
-  | "paragraph"
-  | "metadata"
-  | "schema"
-  | "image"
-  | "link"
+  /** Document `<title>` element text. */
+  | "title"
+  /** `<meta name="description">` content attribute. */
+  | "meta-description"
+  /** First `<h1>` element text. */
+  | "h1"
+  /** `<h2>` element text. */
+  | "h2"
+  /** `<h3>` element text. */
+  | "h3"
+  /** Anchor text from a link inside `<nav>`. */
+  | "navigation-link"
+  /** Anchor text from a link inside `<footer>`. */
+  | "footer-link"
+  /** `<button>` element text. */
   | "button"
+  /** `<li>` element text in an unordered or ordered list. */
+  | "list-item"
+  /** Raw JSON-LD script block (future extractors). */
+  | "json-ld"
+  /** Organization structured data fields (future extractors). */
+  | "organization-schema"
+  /** Product structured data fields (future extractors). */
+  | "product-schema"
+  /** Image alt text or asset reference (future extractors). */
+  | "image"
+  /** Review or testimonial content (future extractors). */
   | "review"
+  /** FAQ question or answer content (future extractors). */
   | "faq";
+
+/** Structural source types emitted by {@link HtmlParser}. */
+export type HtmlParserSourceType = Extract<
+  ObservationSourceType,
+  | "title"
+  | "meta-description"
+  | "h1"
+  | "h2"
+  | "h3"
+  | "navigation-link"
+  | "footer-link"
+  | "button"
+  | "list-item"
+>;
 
 /**
  * A single raw observation collected by the Discovery Engine before any
  * interpretation, classification, or mapping to structured evidence.
  */
 export interface Observation {
-  /** Stable unique identifier for this observation within a discovery run. */
   id: string;
-
-  /** Absolute URL of the page where the observation was extracted. */
   pageUrl: string;
-
-  /** Structural category of the source element or page artifact. */
   sourceType: ObservationSourceType;
-
-  /** CSS selector locating the source element on the page, when applicable. */
   selector: string;
-
-  /** Unprocessed text or value as extracted from the source, with no inference applied. */
   rawValue: string;
-
-  /** Extraction confidence on a 0–1 scale, where 1 indicates highest certainty. */
   confidence: number;
-
-  /** ISO 8601 timestamp recording when this observation was discovered. */
   discoveredAt: string;
 }
