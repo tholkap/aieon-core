@@ -1,65 +1,44 @@
-import type { BusinessQuestionEngine } from "@/src/questions/shared/BusinessQuestionEngine";
-import type { BusinessQuestionStatus } from "@/src/questions/shared/types";
+import {
+  adaptQuestionEngineToLegacy,
+  createQuestionEngineContext,
+} from "@/src/questions/shared/QuestionEngine";
+import type { QuestionResult } from "@/src/questions/shared/QuestionResult";
+import type { Observation } from "@/src/types/observation";
+import type { ResolvedIdentity } from "@/src/types/resolved-identity";
 
-export const execute: BusinessQuestionEngine = (
-  _observations,
-  resolvedIdentity,
-) => {
-  const details: string[] = [];
+import {
+  runWhoAreTheyAnalysis,
+  whoAreTheyQuestionEngine,
+} from "./WhoAreTheyQuestionEngine";
 
-  if (resolvedIdentity.primaryBrand) {
-    details.push(`Primary brand: ${resolvedIdentity.primaryBrand}`);
-  }
+export const execute = adaptQuestionEngineToLegacy(whoAreTheyQuestionEngine);
 
-  if (resolvedIdentity.legalBusinessName) {
-    details.push(`Legal name: ${resolvedIdentity.legalBusinessName}`);
-  }
+/**
+ * Runs the Who Are They? Question Engine from observations and content zones.
+ */
+export function runWhoAreTheyEngine(
+  observations: Observation[],
+  resolvedIdentity?: ResolvedIdentity,
+): QuestionResult {
+  return runWhoAreTheyAnalysis(
+    createQuestionEngineContext(
+      observations,
+      resolvedIdentity ?? createEmptyResolvedIdentity(),
+    ),
+  );
+}
 
-  if (resolvedIdentity.domain) {
-    details.push(`Website: ${resolvedIdentity.domain}`);
-  }
-
-  if (resolvedIdentity.websiteTitle) {
-    details.push(`Page title: ${resolvedIdentity.websiteTitle}`);
-  }
-
-  if (resolvedIdentity.candidateNames.length > 0) {
-    details.push(
-      `Other names found: ${resolvedIdentity.candidateNames.join(", ")}`,
-    );
-  }
-
-  let summary: string;
-  let status: BusinessQuestionStatus;
-
-  if (resolvedIdentity.primaryBrand) {
-    summary = resolvedIdentity.primaryBrand;
-    status = "found";
-  } else if (
-    resolvedIdentity.candidateNames.length > 0 ||
-    resolvedIdentity.websiteTitle
-  ) {
-    summary =
-      "Your site mentions several possible brand names, but they do not yet agree strongly enough to confirm one primary identity.";
-    status = "partial";
-  } else if (resolvedIdentity.domain) {
-    summary = `We could identify the website domain (${resolvedIdentity.domain}) but no clear brand name from page content.`;
-    status = "partial";
-  } else {
-    summary = "Not found on your website";
-    status = "missing";
-  }
-
+function createEmptyResolvedIdentity(): ResolvedIdentity {
   return {
-    id: "who",
-    question: "Who are they?",
-    sectionTitle: "Who you are",
-    summary,
-    details,
-    status,
-    howDetermined:
-      resolvedIdentity.reasoning.length > 0
-        ? resolvedIdentity.reasoning
-        : undefined,
+    primaryBrand: "",
+    legalBusinessName: "",
+    tradingName: "",
+    domain: "",
+    websiteTitle: "",
+    candidateNames: [],
+    operatingCountry: "",
+    confidence: 0,
+    evidence: [],
+    reasoning: [],
   };
-};
+}
