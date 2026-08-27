@@ -8,35 +8,21 @@ import type { ResolvedBusinessUnderstanding } from "@/src/types/resolved-busines
 const UNRESOLVED_CONFIDENCE = 0;
 
 /**
- * Existing {@link ObservationSourceType} values used for product name extraction.
+ * Canonical {@link ObservationSourceType} values eligible for product name extraction.
  *
- * `link` maps to navigation-sourced product labels. `metadata` and `schema` map
- * to structured metadata. `heading` maps to product headings on listing pages.
+ * `navigation-link` maps to navigation-sourced product labels.
+ * Structured schema types map to explicit product metadata when present.
+ * Heading levels map to product headings on listing pages.
  */
 const PRODUCT_SOURCE_TYPES = new Set<ObservationSourceType>([
-  "heading",
-  "metadata",
-  "schema",
-  "link",
-]);
-
-/**
- * Forward-compatible source type labels not yet in {@link ObservationSourceType}.
- *
- * When discovery adds `navigation`, `product`, or list-item types, they are
- * recognized without modifying this interpreter's eligibility logic.
- */
-const PRODUCT_SOURCE_TYPE_ALIASES = new Set([
-  "navigation",
-  "product",
-  "list",
-  "list item",
-]);
-
-/** Metadata selectors that carry page-level descriptors, not product names. */
-const NON_PRODUCT_METADATA_SELECTORS = new Set([
-  "title",
-  'meta[name="description"]',
+  "h1",
+  "h2",
+  "h3",
+  "navigation-link",
+  "list-item",
+  "json-ld",
+  "organization-schema",
+  "product-schema",
 ]);
 
 /**
@@ -190,8 +176,8 @@ export class BusinessUnderstandingInterpreter {
    * Extracts explicit product names from eligible observations.
    *
    * Version 1 rules:
-   * - Only observations whose source type indicates navigation, product, heading,
-   *   list item, or structured metadata are considered
+   * - Only observations whose source type indicates navigation, headings,
+   *   list items, or structured schema are considered
    * - Product name is the trimmed verbatim `rawValue` — never inferred
    * - Case-insensitive deduplication; first-seen display casing is preserved
    * - Observation IDs for accepted products are recorded in evidence
@@ -252,57 +238,19 @@ export class BusinessUnderstandingInterpreter {
 
   /**
    * Determines whether an observation may contribute an explicit product name.
-   *
-   * Eligible when sourceType is heading, metadata, schema, or link (navigation),
-   * when sourceType matches a forward-compatible alias (product, list item, navigation),
-   * or when the selector indicates a list item (`li`) on paragraph observations.
    */
   private isProductEligibleObservation(observation: Observation): boolean {
-    if (PRODUCT_SOURCE_TYPES.has(observation.sourceType)) {
-      if (
-        observation.sourceType === "metadata" &&
-        NON_PRODUCT_METADATA_SELECTORS.has(observation.selector)
-      ) {
-        return false;
-      }
-
-      return true;
-    }
-
-    if (PRODUCT_SOURCE_TYPE_ALIASES.has(observation.sourceType)) {
-      return true;
-    }
-
-    if (this.isListItemObservation(observation)) {
-      return true;
-    }
-
-    return false;
+    return PRODUCT_SOURCE_TYPES.has(observation.sourceType);
   }
 
   /**
-   * Identifies list-item observations when list source types are not yet emitted.
-   *
-   * Matches selectors that locate `<li>` elements (e.g. `li`, `ul li`, `.products li`).
-   */
-  private isListItemObservation(observation: Observation): boolean {
-    const selector = observation.selector.trim().toLowerCase();
-
-    return (
-      selector === "li" ||
-      selector.endsWith(" li") ||
-      selector.includes(" li ")
-    );
-  }
-
-  /**
-   * Applies the deterministic navigation blocklist to link-sourced observations.
+   * Applies the deterministic navigation blocklist to navigation-link observations.
    */
   private isBlockedNavigationLabel(
     observation: Observation,
     productName: string,
   ): boolean {
-    if (observation.sourceType !== "link") {
+    if (observation.sourceType !== "navigation-link") {
       return false;
     }
 

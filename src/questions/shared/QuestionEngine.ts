@@ -2,9 +2,26 @@ import type { BusinessQuestion } from "@/src/questions/shared/types";
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
 
-import { createContentZoneEngine } from "./ContentZoneEngine";
+import { extractContentZones } from "@/src/content-zones";
+import { buildWebsiteEvidence } from "@/src/evidence/EvidenceBuilder";
+
 import type { QuestionAnalysis, QuestionEngineContext } from "./QuestionAnalysis";
 import { mapAnalysisToBusinessQuestion } from "./QuestionMapper";
+
+export function createEmptyResolvedIdentity(): ResolvedIdentity {
+  return {
+    primaryBrand: "",
+    legalBusinessName: "",
+    tradingName: "",
+    domain: "",
+    websiteTitle: "",
+    candidateNames: [],
+    operatingCountry: "",
+    confidence: 0,
+    evidence: [],
+    reasoning: [],
+  };
+}
 
 /**
  * Permanent contract for all Question Engines.
@@ -30,11 +47,13 @@ export function createQuestionEngineContext(
   observations: Observation[],
   resolvedIdentity: ResolvedIdentity,
 ): QuestionEngineContext {
-  const contentZones = createContentZoneEngine().classifyToMap(observations);
+  const contentZones = extractContentZones(observations);
+  const websiteEvidence = buildWebsiteEvidence(contentZones);
 
   return {
     observations,
     contentZones,
+    websiteEvidence,
     resolvedIdentity,
   };
 }

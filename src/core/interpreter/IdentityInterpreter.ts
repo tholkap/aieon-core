@@ -1,12 +1,6 @@
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
 
-/** CSS selector used by {@link HtmlParser} for the document title observation. */
-const TITLE_SELECTOR = "title";
-
-/** CSS selector used by {@link HtmlParser} for the first H1 observation. */
-const FIRST_H1_SELECTOR = "h1";
-
 /** Confidence when a primary brand is supported by multiple observations. */
 const RESOLVED_CONFIDENCE = 1;
 
@@ -140,9 +134,7 @@ export class IdentityInterpreter {
     observations: Observation[],
   ): Observation | undefined {
     return observations.find(
-      (observation) =>
-        observation.sourceType === "metadata" &&
-        observation.selector === TITLE_SELECTOR,
+      (observation) => observation.sourceType === "title",
     );
   }
 
@@ -152,11 +144,7 @@ export class IdentityInterpreter {
   private findFirstH1Observation(
     observations: Observation[],
   ): Observation | undefined {
-    return observations.find(
-      (observation) =>
-        observation.sourceType === "heading" &&
-        observation.selector === FIRST_H1_SELECTOR,
-    );
+    return observations.find((observation) => observation.sourceType === "h1");
   }
 
   /**

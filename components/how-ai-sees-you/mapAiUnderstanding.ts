@@ -4,7 +4,6 @@ import {
   type BusinessProfile,
   type BusinessQuestion,
 } from "@/components/discovery/mapBusinessProfile";
-import { execute as executeWhoAreThey } from "@/src/questions/who-are-they/execute";
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
 
@@ -292,12 +291,5 @@ export function mapDiscoveryToAiUnderstanding(
   identity: ResolvedIdentity,
 ): AiUnderstandingReport {
   const base = mapDiscoveryToBusinessProfile(url, observations, identity);
-
-  // TODO Sprint 5+: Delegate questions 2–6 to their src/questions/* modules.
-  const questions: BusinessQuestion[] = [
-    executeWhoAreThey(observations, identity),
-    ...base.questions.slice(1),
-  ];
-
-  return toCustomerProfile({ ...base, questions });
+  return toCustomerProfile(base);
 }

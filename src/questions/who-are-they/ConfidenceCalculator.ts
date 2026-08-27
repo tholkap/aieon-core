@@ -1,10 +1,9 @@
-import type { Observation } from "@/src/types/observation";
-
 import { resolveWeightedConfidence } from "@/src/questions/shared/Confidence";
 
 import {
   extractDomainFromObservations,
   extractWebsiteTitle,
+  type ExtractCandidatesInput,
 } from "./CandidateExtractor";
 import { uniqueDisplayValues } from "./CandidateNormalizer";
 import type { NormalizedBrandCandidateGroup } from "./types";
@@ -36,10 +35,11 @@ function buildPartialAnswer(
 export function calculateConfidence(
   rankedCandidates: RankedBrandCandidate[],
   groups: NormalizedBrandCandidateGroup[],
-  observations: Observation[],
+  extractInput: Pick<ExtractCandidatesInput, "observations">,
 ): ConfidenceResult {
+  const { observations } = extractInput;
   const domain = extractDomainFromObservations(observations);
-  const websiteTitle = extractWebsiteTitle(observations);
+  const websiteTitle = extractWebsiteTitle(extractInput);
   const pageContentGroups = groups.filter((group) =>
     group.members.some((member) => member.sourceType !== "domain"),
   );

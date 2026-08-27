@@ -1,5 +1,6 @@
 import {
   adaptQuestionEngineToLegacy,
+  createEmptyResolvedIdentity,
   createQuestionEngineContext,
 } from "@/src/questions/shared/QuestionEngine";
 import type { QuestionResult } from "@/src/questions/shared/QuestionResult";
@@ -26,19 +27,4 @@ export function runWhoAreTheyEngine(
       resolvedIdentity ?? createEmptyResolvedIdentity(),
     ),
   );
-}
-
-function createEmptyResolvedIdentity(): ResolvedIdentity {
-  return {
-    primaryBrand: "",
-    legalBusinessName: "",
-    tradingName: "",
-    domain: "",
-    websiteTitle: "",
-    candidateNames: [],
-    operatingCountry: "",
-    confidence: 0,
-    evidence: [],
-    reasoning: [],
-  };
 }

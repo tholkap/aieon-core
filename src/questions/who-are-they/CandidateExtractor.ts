@@ -1,11 +1,21 @@
+import type { WebsiteEvidence } from "@/src/evidence/EvidenceTypes";
 import type { Observation } from "@/src/types/observation";
 
 import type { BrandCandidateSource, RawBrandCandidate } from "./types";
 
 const DOMAIN_OBSERVATION_ID = "domain::hostname";
 
+export interface ExtractCandidatesInput {
+  websiteEvidence: WebsiteEvidence;
+  observations: Observation[];
+}
+
 function normalizeValue(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function trimValue(value: string): string {
+  return value.trim();
 }
 
 function extractTitlePrefix(title: string): string {
@@ -70,6 +80,13 @@ function domainCandidates(hostname: string): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
+function findObservation(
+  observations: Observation[],
+  sourceType: Observation["sourceType"],
+): Observation | undefined {
+  return observations.find((observation) => observation.sourceType === sourceType);
+}
+
 function appendCandidate(
   candidates: RawBrandCandidate[],
   value: string,
@@ -94,75 +111,122 @@ function appendCandidate(
   });
 }
 
-/**
- * Extracts brand-name candidates from title, H1, meta description, and domain.
- *
- * Every candidate is traceable to an observation ID or a deterministic
- * hostname derivation from the page URL.
- */
-export function extractCandidates(
-  observations: Observation[],
-): RawBrandCandidate[] {
-  const candidates: RawBrandCandidate[] = [];
-
-  const titleObservation = observations.find(
-    (observation) => observation.sourceType === "title",
+function appendFromObservation(
+  candidates: RawBrandCandidate[],
+  value: string,
+  sourceType: BrandCandidateSource,
+  observation: Observation,
+): void {
+  appendCandidate(
+    candidates,
+    value,
+    sourceType,
+    observation.id,
+    observation.selector,
+    observation.rawValue,
   );
-  const h1Observation = observations.find(
-    (observation) => observation.sourceType === "h1",
-  );
-  const metaObservation = observations.find(
-    (observation) => observation.sourceType === "meta-description",
-  );
+}
 
-  if (titleObservation?.rawValue) {
-    const title = titleObservation.rawValue.trim();
+function appendTitlePrefixFromObservation(
+  candidates: RawBrandCandidate[],
+  titleObservation: Observation,
+): void {
+  const title = trimValue(titleObservation.rawValue);
+  const titlePrefix = extractTitlePrefix(title);
 
-    appendCandidate(
+  if (titlePrefix && titlePrefix !== title) {
+    appendFromObservation(
       candidates,
-      title,
+      titlePrefix,
       "title",
-      titleObservation.id,
-      titleObservation.selector,
-      titleObservation.rawValue,
-    );
-
-    const titlePrefix = extractTitlePrefix(title);
-
-    if (titlePrefix && titlePrefix !== title) {
-      appendCandidate(
-        candidates,
-        titlePrefix,
-        "title",
-        titleObservation.id,
-        titleObservation.selector,
-        titleObservation.rawValue,
-      );
-    }
-  }
-
-  if (h1Observation?.rawValue) {
-    appendCandidate(
-      candidates,
-      h1Observation.rawValue,
-      "h1",
-      h1Observation.id,
-      h1Observation.selector,
-      h1Observation.rawValue,
+      titleObservation,
     );
   }
+}
 
-  if (metaObservation?.rawValue) {
-    appendCandidate(
-      candidates,
-      metaObservation.rawValue,
-      "meta-description",
-      metaObservation.id,
-      metaObservation.selector,
-      metaObservation.rawValue,
-    );
+function appendTitleCandidatesFromObservation(
+  candidates: RawBrandCandidate[],
+  titleObservation: Observation | undefined,
+): void {
+  if (!titleObservation?.rawValue) {
+    return;
   }
 
+  const title = trimValue(titleObservation.rawValue);
+
+  appendFromObservation(candidates, title, "title", titleObservation);
+  appendTitlePrefixFromObservation(candidates, titleObservation);
+}
+
+function appendHeroBrandNameCandidate(
+  candidates: RawBrandCandidate[],
+  brandName: string,
+  titleObservation: Observation | undefined,
+  h1Observation: Observation | undefined,
+): void {
+  if (titleObservation && brandName === trimValue(titleObservation.rawValue)) {
+    appendFromObservation(candidates, brandName, "title", titleObservation);
+    appendTitlePrefixFromObservation(candidates, titleObservation);
+    return;
+  }
+
+  if (h1Observation && brandName === trimValue(h1Observation.rawValue)) {
+    appendFromObservation(candidates, brandName, "h1", h1Observation);
+    return;
+  }
+
+  if (titleObservation) {
+    appendFromObservation(candidates, brandName, "title", titleObservation);
+    appendTitlePrefixFromObservation(candidates, titleObservation);
+    return;
+  }
+
+  if (h1Observation) {
+    appendFromObservation(candidates, brandName, "h1", h1Observation);
+  }
+}
+
+function appendHeroMainHeadlineCandidate(
+  candidates: RawBrandCandidate[],
+  mainHeadline: string,
+  brandName: string | undefined,
+  h1Observation: Observation | undefined,
+): void {
+  if (!h1Observation?.rawValue) {
+    return;
+  }
+
+  if (trimValue(h1Observation.rawValue) !== mainHeadline) {
+    return;
+  }
+
+  if (brandName && brandName === mainHeadline) {
+    return;
+  }
+
+  appendFromObservation(candidates, mainHeadline, "h1", h1Observation);
+}
+
+function appendMetaDescriptionFromObservations(
+  candidates: RawBrandCandidate[],
+  metaObservation: Observation | undefined,
+): void {
+  if (!metaObservation?.rawValue) {
+    return;
+  }
+
+  appendFromObservation(
+    candidates,
+    metaObservation.rawValue,
+    "meta-description",
+    metaObservation,
+  );
+}
+
+function appendDomainCandidatesFromObservations(
+  candidates: RawBrandCandidate[],
+  observations: Observation[],
+): void {
   const domain = extractDomain(observations);
 
   for (const domainValue of domainCandidates(domain)) {
@@ -175,6 +239,55 @@ export function extractCandidates(
       domain,
     );
   }
+}
+
+/**
+ * Extracts brand-name candidates from website evidence with observation fallbacks.
+ *
+ * Primary sources: WebsiteEvidence.hero fields.
+ * Fallback sources: observations for fields not yet exposed by the evidence layer.
+ */
+export function extractCandidates({
+  websiteEvidence,
+  observations,
+}: ExtractCandidatesInput): RawBrandCandidate[] {
+  const candidates: RawBrandCandidate[] = [];
+  const hero = websiteEvidence.hero;
+  const titleObservation = findObservation(observations, "title");
+  const h1Observation = findObservation(observations, "h1");
+  const metaObservation = findObservation(observations, "meta-description");
+
+  if (hero?.brandName) {
+    appendHeroBrandNameCandidate(
+      candidates,
+      hero.brandName,
+      titleObservation,
+      h1Observation,
+    );
+  } else {
+    appendTitleCandidatesFromObservation(candidates, titleObservation);
+
+    if (h1Observation?.rawValue) {
+      appendFromObservation(
+        candidates,
+        h1Observation.rawValue,
+        "h1",
+        h1Observation,
+      );
+    }
+  }
+
+  if (hero?.mainHeadline) {
+    appendHeroMainHeadlineCandidate(
+      candidates,
+      hero.mainHeadline,
+      hero.brandName,
+      h1Observation,
+    );
+  }
+
+  appendMetaDescriptionFromObservations(candidates, metaObservation);
+  appendDomainCandidatesFromObservations(candidates, observations);
 
   return candidates;
 }
@@ -185,11 +298,8 @@ export function extractDomainFromObservations(
   return extractDomain(observations);
 }
 
-export function extractWebsiteTitle(
-  observations: Observation[],
-): string {
-  return (
-    observations.find((observation) => observation.sourceType === "title")
-      ?.rawValue ?? ""
-  );
+export function extractWebsiteTitle({
+  observations,
+}: Pick<ExtractCandidatesInput, "observations">): string {
+  return findObservation(observations, "title")?.rawValue ?? "";
 }

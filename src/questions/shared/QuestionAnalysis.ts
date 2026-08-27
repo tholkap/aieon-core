@@ -1,4 +1,5 @@
-import type { ContentZone } from "@/src/questions/shared/ContentZone";
+import type { ContentZone } from "@/src/content-zones/ContentZoneTypes";
+import type { WebsiteEvidence } from "@/src/evidence/EvidenceTypes";
 import type { BusinessQuestionStatus } from "@/src/questions/shared/types";
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
@@ -25,6 +26,7 @@ export interface QuestionAnalysis {
 
 export interface QuestionEngineContext {
   observations: Observation[];
-  contentZones: Map<string, ContentZone>;
+  contentZones: ContentZone[];
+  websiteEvidence: WebsiteEvidence;
   resolvedIdentity: ResolvedIdentity;
 }

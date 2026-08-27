@@ -1,11 +1,5 @@
-import type { AiEONEvidence } from "@/src/types/evidence";
 import type { Observation } from "@/src/types/observation";
-
-/** CSS selector used by {@link HtmlParser} for the document title observation. */
-const TITLE_SELECTOR = "title";
-
-/** CSS selector used by {@link HtmlParser} for the first H1 observation. */
-const FIRST_H1_SELECTOR = "h1";
+import type { AiEONEvidence } from "@/src/types/evidence";
 
 /**
  * Transforms raw {@link Observation} records into structured {@link AiEONEvidence}.
@@ -52,32 +46,22 @@ export class EvidenceBuilder {
 
   /**
    * Locates the document title observation emitted by the HTML parser.
-   *
-   * Matches metadata observations whose selector is the literal `title` element.
    */
   private findTitleObservation(
     observations: Observation[],
   ): Observation | undefined {
     return observations.find(
-      (observation) =>
-        observation.sourceType === "metadata" &&
-        observation.selector === TITLE_SELECTOR,
+      (observation) => observation.sourceType === "title",
     );
   }
 
   /**
    * Locates the first H1 observation emitted by the HTML parser.
-   *
-   * Matches heading observations whose selector is the literal `h1` element.
    */
   private findFirstH1Observation(
     observations: Observation[],
   ): Observation | undefined {
-    return observations.find(
-      (observation) =>
-        observation.sourceType === "heading" &&
-        observation.selector === FIRST_H1_SELECTOR,
-    );
+    return observations.find((observation) => observation.sourceType === "h1");
   }
 
   /**

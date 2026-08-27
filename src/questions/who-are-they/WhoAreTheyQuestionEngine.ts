@@ -9,6 +9,7 @@ import type { QuestionResult } from "@/src/questions/shared/QuestionResult";
 
 import { analyzeBlindSpots } from "./BlindSpotAnalyzer";
 import { extractCandidates } from "./CandidateExtractor";
+import { buildObservationZoneMap } from "./contentZoneMap";
 import { normalizeCandidates } from "./CandidateNormalizer";
 import { calculateConfidence } from "./ConfidenceCalculator";
 import { collectAlternateCandidates, rankCandidates } from "./EvidenceRanker";
@@ -22,13 +23,18 @@ interface WhoAreTheyPipelineResult {
 }
 
 function runPipeline(context: QuestionEngineContext): WhoAreTheyPipelineResult {
-  const rawCandidates = extractCandidates(context.observations);
+  const extractInput = {
+    websiteEvidence: context.websiteEvidence,
+    observations: context.observations,
+  };
+  const rawCandidates = extractCandidates(extractInput);
   const groups = normalizeCandidates(rawCandidates);
-  const rankedCandidates = rankCandidates(groups, context.contentZones);
+  const observationZoneMap = buildObservationZoneMap(context.contentZones);
+  const rankedCandidates = rankCandidates(groups, observationZoneMap);
   const confidence = calculateConfidence(
     rankedCandidates,
     groups,
-    context.observations,
+    extractInput,
   );
   const blindSpots = analyzeBlindSpots(context.observations, confidence);
   const recommendations = generateRecommendations(blindSpots);

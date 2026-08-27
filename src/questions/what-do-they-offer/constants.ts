@@ -1,0 +1,23 @@
+/** Navigation labels excluded from offering categories — wayfinding only. */
+export const NON_OFFERING_NAVIGATION_LABELS = new Set([
+  "home",
+  "about",
+  "about us",
+  "contact",
+  "contact us",
+  "blog",
+  "news",
+  "login",
+  "log in",
+  "sign in",
+  "sign up",
+  "signup",
+  "register",
+  "privacy",
+  "terms",
+  "careers",
+  "faq",
+  "help",
+  "support",
+  "menu",
+]);
