@@ -30,9 +30,8 @@ export default function HeroSection({
           How AI Sees You
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-relaxed text-white/65 sm:text-xl">
-          Discover what AI assistants, search engines, and recommendation
-          systems can actually understand about your business — from your public
-          website alone.
+          See what AiEON can identify about your business from your public
+          website, with the evidence behind each answer.
         </p>
         <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/45">
           Built for founders, marketers, consultants, and executives who need

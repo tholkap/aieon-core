@@ -20,4 +20,11 @@ export const NON_OFFERING_NAVIGATION_LABELS = new Set([
   "help",
   "support",
   "menu",
+  "products",
+  "services",
+  "categories",
+  "departments",
+  "all products",
+  "search",
+  "store",
 ]);

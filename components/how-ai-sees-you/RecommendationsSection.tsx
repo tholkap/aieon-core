@@ -1,10 +1,5 @@
 import type { AiUnderstandingReport } from "@/components/how-ai-sees-you/mapAiUnderstanding";
 
-const PRIORITY_STYLES = {
-  high: "border-[#D4AF37]/30 bg-[#D4AF37]/10 text-[#D4AF37]",
-  medium: "border-white/15 bg-white/[0.04] text-white/60",
-} as const;
-
 export default function RecommendationsSection({
   report,
 }: {
@@ -17,11 +12,10 @@ export default function RecommendationsSection({
           Recommended improvements
         </p>
         <h2 className="mt-2 text-2xl font-semibold text-white">
-          Your homepage is in good shape
+          No changes suggested by the completed checks
         </h2>
         <p className="mt-3 max-w-2xl text-base text-white/60">
-          No urgent content gaps were identified. Focus on keeping messaging
-          consistent as you grow.
+          Other business questions and content outside this scan remain unassessed.
         </p>
       </section>
     );
@@ -34,11 +28,11 @@ export default function RecommendationsSection({
           Recommended improvements
         </p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-          What to fix first
+          What to review next
         </h2>
         <p className="mt-3 max-w-2xl text-base text-white/55">
-          Practical steps to help AI — and humans — understand and recommend
-          you with confidence.
+          Check the evidence first. Make changes only where the information is
+          genuinely unclear or absent.
         </p>
       </header>
 
@@ -54,11 +48,6 @@ export default function RecommendationsSection({
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-3">
                 <h3 className="text-lg font-semibold text-white">{rec.title}</h3>
-                <span
-                  className={`rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${PRIORITY_STYLES[rec.priority]}`}
-                >
-                  {rec.priority} priority
-                </span>
               </div>
               <p className="mt-2 text-sm leading-relaxed text-white/60">
                 {rec.description}

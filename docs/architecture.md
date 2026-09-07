@@ -1,5 +1,7 @@
 # AiEON Architecture
 
+> Historical foundation reference. For the runtime inspected on 7 September 2026, active versus unused paths, benchmark results, and launch blockers, see [the current-state assessment](./current-state-2026-09-07.md). That assessment reflects the six-question product and the code currently wired to it.
+
 This document describes the analysis pipeline from website URL to business understanding, including implemented modules, defined types, and planned layers.
 
 The ten canonical questions that drive this architecture are defined in [business-understanding-framework.md](./business-understanding-framework.md).

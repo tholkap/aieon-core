@@ -16,6 +16,7 @@ import {
 } from "./EvidenceRanker";
 import {
   buildOfferingCatalog,
+  extractCorroboratedLabels,
   extractOfferingCandidates,
 } from "./OfferingExtractor";
 import { normalizeOfferingCandidates } from "./OfferingNormalizer";
@@ -60,11 +61,7 @@ function runPipeline(context: QuestionEngineContext): OfferingPipelineResult {
     groups,
     catalog,
   );
-  const blindSpots = analyzeOfferingBlindSpots(
-    context.websiteEvidence,
-    context.observations,
-    confidence,
-  );
+  const blindSpots = analyzeOfferingBlindSpots(confidence);
   const recommendations = generateOfferingRecommendations(blindSpots);
   const alternateOfferings = collectAlternateOfferings(
     rankedCandidates,
@@ -78,12 +75,18 @@ function runPipeline(context: QuestionEngineContext): OfferingPipelineResult {
     answer: confidence.answer,
     confidence: confidence.confidence,
     status: confidence.status,
-    evidence: selectEvidenceForResult(
+    evidence: [...selectEvidenceForResult(
       rankedCandidates,
       confidence.winningCandidate,
       confidence.status,
-    ),
-    reasoning: confidence.reasoning,
+    ), ...extractCorroboratedLabels(input).flatMap((item) => item.observations.map((observation) => ({
+      observationId: observation.id,
+      sourceType: observation.sourceType,
+      selector: observation.selector,
+      rawValue: observation.rawValue,
+      weight: 0,
+    })))],
+    reasoning: [...confidence.reasoning, "Descriptions are quoted from the page, not independently verified. Confidence is an internal rule-based support indicator, not a probability or AI visibility score."],
     blindSpots,
     recommendations,
   };
@@ -105,7 +108,7 @@ function buildDetailsFromUnderstanding(
   const details: string[] = [];
 
   if (understanding.primaryOffering) {
-    details.push(`Primary offering: ${understanding.primaryOffering}`);
+    details.push(`Offering description found: ${understanding.primaryOffering}`);
   }
 
   if (understanding.products.length > 0) {
@@ -117,7 +120,7 @@ function buildDetailsFromUnderstanding(
   }
 
   if (understanding.categories.length > 0) {
-    details.push(`Categories: ${understanding.categories.join(", ")}`);
+    details.push(`Matching navigation and heading labels: ${understanding.categories.slice(0, 8).join(", ")}`);
   }
 
   if (alternateOfferings.length > 0) {

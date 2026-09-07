@@ -3,7 +3,7 @@ import type { BusinessQuestion } from "@/components/discovery/mapBusinessProfile
 const STATUS_LABELS = {
   found: "Found on your site",
   partial: "Partially clear",
-  missing: "Not found",
+  missing: "Not identified in checked content",
 } as const;
 
 const STATUS_STYLES = {
@@ -33,7 +33,7 @@ export default function BusinessQuestionCard({
         <span
           className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_STYLES[question.status]}`}
         >
-          {STATUS_LABELS[question.status]}
+          {question.assessment === "not-assessed" ? "Not assessed yet" : STATUS_LABELS[question.status]}
         </span>
       </div>
 
@@ -53,18 +53,24 @@ export default function BusinessQuestionCard({
         </ul>
       )}
 
-      {question.howDetermined && question.howDetermined.length > 0 && (
+      {((question.howDetermined?.length ?? 0) > 0 || (question.sources?.length ?? 0) > 0) && (
         <details className="mt-4 group" open={defaultOpen}>
           <summary className="cursor-pointer text-sm text-white/50 transition-colors hover:text-white/70">
             How we determined this
           </summary>
           <ul className="mt-3 space-y-2 rounded-xl bg-white/[0.03] p-4">
-            {question.howDetermined.map((step) => (
+            {question.howDetermined?.map((step) => (
               <li key={step} className="text-sm leading-relaxed text-white/60">
                 {step}
               </li>
             ))}
           </ul>
+          {question.sources?.map((source) => (
+            <blockquote key={source.observationId} className="mt-3 break-words border-l border-white/20 pl-4 text-sm text-white/60">
+              <p>{source.quote}</p>
+              <p className="mt-1 text-xs text-white/40">Observed on {source.pageUrl} · {source.sourceType} · {source.selector}</p>
+            </blockquote>
+          ))}
         </details>
       )}
     </article>

@@ -1,238 +1,60 @@
 import type { WebsiteEvidence } from "@/src/evidence/EvidenceTypes";
 import type { Observation } from "@/src/types/observation";
-
 import { NON_OFFERING_NAVIGATION_LABELS } from "./constants";
 import type { OfferingCatalog, RawOfferingCandidate } from "./types";
-
-const EVIDENCE_OBSERVATION_PREFIX = "website-evidence::";
 
 export interface ExtractOfferingInput {
   websiteEvidence: WebsiteEvidence;
   observations: Observation[];
 }
 
-function normalizeValue(value: string): string {
-  return value.trim().toLowerCase();
+const normalize = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+
+// Conservative English description rules, not a general semantic classifier.
+// Answers stay verbatim: these terms never supply an inferred category.
+const OFFERING_DESCRIPTION = /\b(software|platform|consulting|accounting|legal services|repair services|flower delivery|news|newspaper|news coverage|news updates|accommodation|hotel rooms|courses|training|manufactur(?:e|es|ing)|sell|sells|provide|provides|offer|offers|speciali[sz]e|speciali[sz]es|delivery|shipping)\b/i;
+const NEGATED_DESCRIPTION = /\b(?:do not|does not|don't|doesn't|never|not)\s+(?:offer|provide|sell|manufacture|a\b|an\b)/i;
+
+function isOfferingDescription(value: string): boolean {
+  const words = value.trim().split(/\s+/);
+  return words.length >= 4 && value.length <= 700 &&
+    !/[<>]/.test(value) && !NEGATED_DESCRIPTION.test(value) &&
+    OFFERING_DESCRIPTION.test(value);
 }
 
-function findObservation(
-  observations: Observation[],
-  sourceType: Observation["sourceType"],
-): Observation | undefined {
-  return observations.find((observation) => observation.sourceType === sourceType);
-}
-
-function appendCandidate(
-  candidates: RawOfferingCandidate[],
-  value: string,
-  sourceType: RawOfferingCandidate["sourceType"],
-  observationId: string,
-  selector: string,
-  rawValue: string,
-): void {
-  const trimmed = value.trim();
-
-  if (!trimmed) {
-    return;
-  }
-
-  candidates.push({
-    value: trimmed,
-    normalized: normalizeValue(trimmed),
-    sourceType,
-    observationId,
-    selector,
-    rawValue,
-  });
-}
-
-function appendEvidenceCandidate(
-  candidates: RawOfferingCandidate[],
-  value: string | undefined,
-  sourceType: RawOfferingCandidate["sourceType"],
-  evidencePath: string,
-): void {
-  if (!value) {
-    return;
-  }
-
-  appendCandidate(
-    candidates,
-    value,
-    sourceType,
-    `${EVIDENCE_OBSERVATION_PREFIX}${evidencePath}`,
-    evidencePath,
-    value,
-  );
-}
-
-function appendObservationCandidate(
-  candidates: RawOfferingCandidate[],
-  observation: Observation | undefined,
-  sourceType: RawOfferingCandidate["sourceType"],
-): void {
-  if (!observation?.rawValue.trim()) {
-    return;
-  }
-
-  appendCandidate(
-    candidates,
-    observation.rawValue,
-    sourceType,
-    observation.id,
-    observation.selector,
-    observation.rawValue,
-  );
-}
-
-function hasEvidenceCandidate(
-  candidates: RawOfferingCandidate[],
-  sourceType: RawOfferingCandidate["sourceType"],
-): boolean {
-  return candidates.some((candidate) => candidate.sourceType === sourceType);
-}
-
-function uniqueValues(values: string[]): string[] {
-  const seen = new Set<string>();
-  const unique: string[] = [];
-
-  for (const value of values) {
-    const normalized = normalizeValue(value);
-
-    if (seen.has(normalized)) {
-      continue;
-    }
-
-    seen.add(normalized);
-    unique.push(value.trim());
-  }
-
-  return unique;
-}
-
-function observationValuesInOrder(
-  observations: Observation[],
-  sourceType: Observation["sourceType"],
-): string[] {
+/** Select descriptive copy, never a title, arbitrary heading, or CTA alone. */
+export function extractOfferingCandidates({ observations }: ExtractOfferingInput): RawOfferingCandidate[] {
   return observations
-    .filter((observation) => observation.sourceType === sourceType)
-    .map((observation) => observation.rawValue.trim())
-    .filter((value) => value.length > 0);
+    .filter((o) => (o.sourceType === "h1" || o.sourceType === "meta-description") && isOfferingDescription(o.rawValue))
+    .map((o) => ({
+      value: o.rawValue.trim(),
+      normalized: normalize(o.rawValue),
+      sourceType: o.sourceType === "h1" ? "observation-h1" : "observation-meta",
+      observationId: o.id,
+      selector: o.selector,
+      rawValue: o.rawValue,
+    }));
 }
 
 /**
- * Extracts primary offering candidates from website evidence first,
- * then observation fallbacks for missing fields.
+ * Matching heading and navigation text is a named-offering clue, not proof
+ * that every navigation label is a product. Preserve both actual sources.
  */
-export function extractOfferingCandidates({
-  websiteEvidence,
-  observations,
-}: ExtractOfferingInput): RawOfferingCandidate[] {
-  const candidates: RawOfferingCandidate[] = [];
-  const hero = websiteEvidence.hero;
-  const supportingMessage = websiteEvidence.supportingMessage;
-  const cta = websiteEvidence.cta;
-
-  appendEvidenceCandidate(
-    candidates,
-    hero?.mainHeadline,
-    "hero-main-headline",
-    "hero.mainHeadline",
-  );
-  appendEvidenceCandidate(
-    candidates,
-    supportingMessage?.metaDescription,
-    "supporting-meta",
-    "supportingMessage.metaDescription",
-  );
-  appendEvidenceCandidate(
-    candidates,
-    hero?.supportingHeadline,
-    "hero-supporting-headline",
-    "hero.supportingHeadline",
-  );
-  appendEvidenceCandidate(
-    candidates,
-    supportingMessage?.sectionHeadings[0],
-    "supporting-section-heading",
-    "supportingMessage.sectionHeadings[0]",
-  );
-
-  const primaryCta = hero?.primaryCallToAction ?? cta?.callToActions[0];
-  const ctaEvidencePath = hero?.primaryCallToAction
-    ? "hero.primaryCallToAction"
-    : "cta.callToActions[0]";
-
-  appendEvidenceCandidate(candidates, primaryCta, "cta", ctaEvidencePath);
-
-  if (!hasEvidenceCandidate(candidates, "hero-main-headline")) {
-    appendObservationCandidate(
-      candidates,
-      findObservation(observations, "h1"),
-      "observation-h1",
-    );
+export function extractCorroboratedLabels({ observations }: ExtractOfferingInput) {
+  const labels = new Map<string, { value: string; observations: Observation[] }>();
+  const navigation = observations.filter((o) => o.sourceType === "navigation-link");
+  for (const heading of observations) {
+    if (heading.sourceType !== "h2" && heading.sourceType !== "h3") continue;
+    const value = heading.rawValue.trim();
+    const key = normalize(value);
+    if (!key || value.length > 80 || /[<>]/.test(value) || NON_OFFERING_NAVIGATION_LABELS.has(key)) continue;
+    const matches = navigation.filter((o) => normalize(o.rawValue) === key && o.id !== heading.id);
+    if (matches.length && !labels.has(key)) labels.set(key, { value, observations: [heading, ...matches] });
   }
-
-  if (!hasEvidenceCandidate(candidates, "supporting-meta")) {
-    appendObservationCandidate(
-      candidates,
-      findObservation(observations, "meta-description"),
-      "observation-meta",
-    );
-  }
-
-  if (!hasEvidenceCandidate(candidates, "hero-supporting-headline")) {
-    appendObservationCandidate(
-      candidates,
-      findObservation(observations, "h2"),
-      "observation-h2",
-    );
-  }
-
-  if (!hasEvidenceCandidate(candidates, "supporting-section-heading")) {
-    appendObservationCandidate(
-      candidates,
-      findObservation(observations, "h3"),
-      "observation-h3",
-    );
-  }
-
-  if (!hasEvidenceCandidate(candidates, "cta")) {
-    appendObservationCandidate(
-      candidates,
-      findObservation(observations, "button"),
-      "observation-cta",
-    );
-  }
-
-  return candidates;
+  return [...labels.values()];
 }
 
-/**
- * Builds structured offering catalog fields from evidence and observation fallbacks.
- */
-export function buildOfferingCatalog({
-  websiteEvidence,
-  observations,
-}: ExtractOfferingInput): OfferingCatalog {
-  const navigationLinks =
-    websiteEvidence.navigation?.primaryLinks ??
-    observationValuesInOrder(observations, "navigation-link");
-
-  const categories = uniqueValues(
-    navigationLinks.filter(
-      (link) => !NON_OFFERING_NAVIGATION_LABELS.has(link.toLowerCase()),
-    ),
-  );
-
-  const products = uniqueValues([
-    ...observationValuesInOrder(observations, "list-item"),
-    ...observationValuesInOrder(observations, "product-schema"),
-  ]);
-
-  return {
-    products,
-    services: [],
-    categories,
-  };
+/** Do not turn arbitrary list items into products or presume service coverage. */
+export function buildOfferingCatalog(input: ExtractOfferingInput): OfferingCatalog {
+  return { products: [], services: [], categories: extractCorroboratedLabels(input).map((item) => item.value) };
 }
