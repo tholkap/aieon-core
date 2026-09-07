@@ -23,7 +23,7 @@ function buildPartialAnswer(
   }
 
   if (catalog.categories.length > 0) {
-    return "Navigation categories were found, but no clear primary offering statement was identified.";
+    return `Possible offerings named on this page: ${catalog.categories.slice(0, 8).join(", ")}.`;
   }
 
   return "Not found on your website";
@@ -55,6 +55,22 @@ export function calculateOfferingConfidence(
   const hasPartialSignals =
     rankedCandidates.length > 0 || catalog.categories.length > 0;
 
+  // Keep label-only handling local; the shared framework remains frozen.
+  if (rankedCandidates.length === 0) {
+    return {
+      answer: catalog.categories.length ? buildPartialAnswer(catalog, []) : "No clear offering description identified in the content checked.",
+      confidence: 0,
+      status: catalog.categories.length ? "partial" : "missing",
+      winningCandidate: null,
+      rankedCandidates,
+      primaryOffering: "",
+      catalog,
+      reasoning: [catalog.categories.length
+        ? "The same labels appear in navigation and headings. These are offering clues; their product or service role has not been verified."
+        : "No descriptive offering statement matched the current English-language rules. This does not establish that your website lacks offering information."],
+    };
+  }
+
   const evaluation = resolveWeightedConfidence<RankedOfferingCandidate>({
     rankedCandidates,
     policy: {
@@ -80,7 +96,7 @@ export function calculateOfferingConfidence(
     resolvedReason: (winner, confidence) =>
       `Primary offering resolved to "${winner.displayValue}" — confidence ${confidence.toFixed(2)} meets threshold ${FOUND_OFFERING_CONFIDENCE_THRESHOLD}.`,
     unresolvedReason: (winner) =>
-      `No resolved primary offering — top candidate "${winner.displayValue}" did not meet the main-headline evidence requirement.`,
+      `The description "${winner.displayValue}" has limited corroboration under the current rules. Matching wording in distinct checked sources is required for a supported result; different wording is not evidence of a contradiction.`,
   });
 
   const winningCandidate = evaluation.winningCandidate;
@@ -91,7 +107,7 @@ export function calculateOfferingConfidence(
 
   return {
     answer: evaluation.answer,
-    confidence: evaluation.confidence,
+    confidence: Math.min(1, evaluation.confidence),
     status: evaluation.status,
     winningCandidate,
     rankedCandidates,

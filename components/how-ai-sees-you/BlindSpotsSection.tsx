@@ -9,14 +9,14 @@ export default function BlindSpotsSection({
     return (
       <section className="rounded-3xl border border-[#34D399]/20 bg-[#34D399]/5 p-8 sm:p-10">
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#34D399]">
-          AI blind spots
+          Areas to review
         </p>
         <h2 className="mt-2 text-2xl font-semibold text-white">
-          No major blind spots detected
+          No review items from the checks completed
         </h2>
         <p className="mt-3 max-w-2xl text-base text-white/60">
-          All six core questions returned clear signals from your homepage.
-          Continue monitoring as you update content.
+          The completed checks returned supported signals. Unassessed questions
+          and content outside this scan remain unknown.
         </p>
       </section>
     );
@@ -26,14 +26,14 @@ export default function BlindSpotsSection({
     <section className="space-y-6">
       <header>
         <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#F87171]">
-          AI blind spots
+          Areas to review
         </p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-          Where AI loses the plot
+          Where the evidence needs a closer look
         </h2>
         <p className="mt-3 max-w-2xl text-base text-white/55">
-          These gaps mean AI may omit, misstate, or hesitate when describing
-          your business to potential customers.
+          These items reflect AiEON&apos;s current checks. Review the source
+          evidence before deciding whether your website needs a change.
         </p>
       </header>
 

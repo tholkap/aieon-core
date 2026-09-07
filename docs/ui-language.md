@@ -1,5 +1,18 @@
 # AiEON UI Language Map
 
+## Current six-question report correction — 7 September 2026
+
+The current product presents six questions. The older ten-question framework below remains a historical reference. In the current report:
+
+- `not-assessed` means **Not assessed yet**, not missing information on the customer's website. Audience, trust, and differentiation have this state until their engines ship.
+- `missing` means **Not identified in checked content**. It is limited by the current extraction and language coverage.
+- Action results describe **action wording**, not verified or completed customer pathways.
+- Source excerpts are marked **Observed on**, with page and source location in **How we determined this**. Page claims have not been independently verified.
+- No numeric readiness score or frontier-model interpretation is shown. The report describes AiEON's own checks.
+- Recommendations are review items. Do not assign urgency or blame the website for an engine limitation.
+
+These corrections supersede conflicting customer labels below for the current six-question report.
+
 Engineering terms used in code and internal tools mapped to business-facing language for user reports, landing pages, and customer communications.
 
 The ten canonical questions in [business-understanding-framework.md](./business-understanding-framework.md) define what user-facing reports must answer. This document maps code fields to the labels used when presenting those answers.

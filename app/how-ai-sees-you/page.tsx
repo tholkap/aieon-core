@@ -1,13 +1,13 @@
 "use client";
 
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useState } from "react";
 
 import { runDiscovery } from "@/app/discovery/actions";
 import DeveloperView from "@/components/discovery/DeveloperView";
 import AiUnderstandingReportView from "@/components/how-ai-sees-you/AiUnderstandingReport";
 import HeroSection from "@/components/how-ai-sees-you/HeroSection";
 import PreviewGrid from "@/components/how-ai-sees-you/PreviewGrid";
-import { mapDiscoveryToAiUnderstanding } from "@/components/how-ai-sees-you/mapAiUnderstanding";
+import { mapDiscoveryToAiUnderstanding, type AiUnderstandingReport } from "@/components/how-ai-sees-you/mapAiUnderstanding";
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
 
@@ -20,34 +20,33 @@ export default function HowAiSeesYouPage() {
     useState<ResolvedIdentity | null>(null);
   const [hasRun, setHasRun] = useState(false);
 
-  const report = useMemo(() => {
-    if (!hasRun || !resolvedIdentity || error) {
-      return null;
-    }
-
-    return mapDiscoveryToAiUnderstanding(url, observations, resolvedIdentity);
-  }, [hasRun, resolvedIdentity, error, url, observations]);
+  const [report, setReport] = useState<AiUnderstandingReport | null>(null);
 
   async function handleAnalyze(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const submittedUrl = url.trim();
 
     setLoading(true);
     setError(null);
     setObservations([]);
     setResolvedIdentity(null);
+    setReport(null);
 
-    const result = await runDiscovery(url);
-
-    setHasRun(true);
-
-    if ("error" in result) {
-      setError(result.error);
-    } else {
-      setObservations(result.observations);
-      setResolvedIdentity(result.resolvedIdentity);
+    try {
+      const result = await runDiscovery(submittedUrl);
+      if ("error" in result) {
+        setError(result.error);
+      } else {
+        setObservations(result.observations);
+        setResolvedIdentity(result.resolvedIdentity);
+        setReport(mapDiscoveryToAiUnderstanding(submittedUrl, result.observations, result.resolvedIdentity));
+      }
+    } catch {
+      setError("The scan could not be completed. Please try again.");
+    } finally {
+      setHasRun(true);
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   return (
@@ -86,7 +85,7 @@ export default function HowAiSeesYouPage() {
               <div className="h-full w-1/3 animate-pulse rounded-full bg-[#D4AF37]" />
             </div>
             <p className="text-sm text-white/50">
-              Reading your public homepage and building your AI understanding
+              Reading your public page and building your business understanding
               report…
             </p>
           </div>
@@ -127,8 +126,8 @@ export default function HowAiSeesYouPage() {
       <footer className="border-t border-white/10">
         <div className="mx-auto max-w-6xl px-6 py-8 sm:px-10">
           <p className="text-center text-xs text-white/30">
-            Analysis based on public homepage content only. No AI generation.
-            No invented facts.
+            Based on the requested page&apos;s HTML only. Findings are limited to
+            AiEON&apos;s current checks. No frontier AI comparison has been run.
           </p>
         </div>
       </footer>

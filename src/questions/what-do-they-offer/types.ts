@@ -21,7 +21,7 @@ export const MAX_OFFERING_EVIDENCE_WEIGHT = 100;
 
 export const FOUND_OFFERING_CONFIDENCE_THRESHOLD = 0.35;
 
-export const FOUND_OFFERING_MIN_OBSERVATIONS = 1;
+export const FOUND_OFFERING_MIN_OBSERVATIONS = 2;
 
 export type OfferingCandidateSource = keyof typeof OFFERING_EVIDENCE_WEIGHTS;
 

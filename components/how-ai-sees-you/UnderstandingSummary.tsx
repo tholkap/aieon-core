@@ -15,7 +15,7 @@ export default function UnderstandingSummary({
   return (
     <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-8 sm:p-10">
       <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/45">
-        Overall AI understanding
+        Business understanding report
       </p>
       <h2 className="mt-3 text-2xl font-semibold leading-snug tracking-tight text-white sm:text-3xl">
         {report.summaryHeadline}
@@ -33,12 +33,12 @@ export default function UnderstandingSummary({
         </span>
       </div>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-[#34D399]/20 bg-[#34D399]/5 px-5 py-4">
           <p className="text-3xl font-semibold text-[#34D399]">
             {report.stats.clear}
           </p>
-          <p className="mt-1 text-sm text-white/55">Clear to AI</p>
+          <p className="mt-1 text-sm text-white/55">Supported signals</p>
         </div>
         <div className="rounded-2xl border border-[#FBBF24]/20 bg-[#FBBF24]/5 px-5 py-4">
           <p className="text-3xl font-semibold text-[#FBBF24]">
@@ -50,7 +50,11 @@ export default function UnderstandingSummary({
           <p className="text-3xl font-semibold text-white/40">
             {report.stats.missing}
           </p>
-          <p className="mt-1 text-sm text-white/55">Not found</p>
+          <p className="mt-1 text-sm text-white/55">Not identified</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-4">
+          <p className="text-3xl font-semibold text-white/40">{report.stats.notAssessed}</p>
+          <p className="mt-1 text-sm text-white/55">Not assessed yet</p>
         </div>
       </div>
     </section>
