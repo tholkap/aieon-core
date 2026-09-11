@@ -18,7 +18,11 @@ function buildPartialAnswer(
   domain: string,
   pageContentCandidates: string[],
 ): string {
-  if (pageContentCandidates.length > 0) {
+  if (pageContentCandidates.length === 1) {
+    return `AiEON found the name "${pageContentCandidates[0]}", but needs more corroborating identity evidence before confirming it.`;
+  }
+
+  if (pageContentCandidates.length > 1) {
     return "Your site mentions several possible brand names, but they do not yet agree strongly enough to confirm one primary identity.";
   }
 
@@ -59,20 +63,21 @@ export function calculateConfidence(
     isResolved: (winner, confidence) =>
       confidence >= FOUND_CONFIDENCE_THRESHOLD &&
       winner.observationIds.length >= FOUND_MIN_OBSERVATIONS &&
-      winner.sourceTypes.some((sourceType) => sourceType !== "domain"),
+      winner.sourceTypes.some((sourceType) => sourceType !== "domain") &&
+      !rankedCandidates.some(candidate => candidate.normalized !== winner.normalized && candidate.totalWeight >= winner.totalWeight),
     buildPartialAnswer: () =>
       buildPartialAnswer(domain, pageContentCandidates),
     hasPartialSignals,
     reasoningPrefix:
-      "Evaluated observations using deterministic evidence weights — no AI, no fuzzy matching.",
+      "Evaluated observations using deterministic evidence weights — no AI, no fuzzy matching. Confidence is a rule-based support measure, not a probability.",
     emptyReason:
-      "No brand-name candidates extracted from title, H1, meta description, or domain.",
+      "No brand-name candidates extracted from title, H1, or domain.",
     candidateReason: (candidate) =>
       `Candidate "${candidate.displayValue}" — total weight ${candidate.totalWeight}/${MAX_EVIDENCE_WEIGHT} from ${candidate.observationIds.length} observation(s): ${candidate.evidence.map((item) => `${item.sourceType} (${item.weight})`).join(", ")}.`,
     resolvedReason: (winner, confidence) =>
       `Answer resolved to "${winner.displayValue}" — confidence ${confidence.toFixed(2)} meets threshold ${FOUND_CONFIDENCE_THRESHOLD} with ${winner.observationIds.length} supporting observation(s).`,
     unresolvedReason: (winner) =>
-      `No resolved answer — top candidate "${winner.displayValue}" did not meet confidence threshold ${FOUND_CONFIDENCE_THRESHOLD} and ${FOUND_MIN_OBSERVATIONS}-observation requirement together with non-domain page content.`,
+      `No resolved answer — top candidate "${winner.displayValue}" did not meet confidence threshold ${FOUND_CONFIDENCE_THRESHOLD} and ${FOUND_MIN_OBSERVATIONS}-observation requirement with non-domain page content and an unambiguous lead.`,
   });
 
   return {

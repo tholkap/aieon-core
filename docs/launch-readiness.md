@@ -44,3 +44,20 @@ Design references: [OWASP SSRF prevention](https://cheatsheetseries.owasp.org/ch
 ## Decisions and access
 
 Routine implementation is delegated. No credentials should be pasted into chat or committed to source. Before paid infrastructure is provisioned, present the founder with a concrete provider/configuration and operating-cost proposal. Provider billing, account ownership and business verification require the founder when connectors cannot perform them. Accounts, AI provider integration and billing are not implemented and must not be advertised as available.
+
+## Identity corroboration follow-up
+
+The active identity engine now retains independent title/H1 observations, splits explicit title/tagline separators without breaking hyphenated names, handles Home-first titles, and treats exact website-host variants as aliases rather than competing names. Descriptions no longer become whole organization-name candidates. Duplicate observation IDs cannot supply both title and H1 corroboration. A single candidate with insufficient support is described as tentative, not as several conflicting businesses. No shared framework changes or model calls were introduced.
+
+Saved benchmark replay (same captured HTML, not fresh live scans):
+
+| Website | Previous identity state | Updated result |
+|---|---|---|
+| Apple | Partially clear | Apple, found from title, H1 and hostname |
+| Walmart | Partially clear | Walmart, found from title/H1 prefixes and hostname |
+| Qatar Tribune | Partially clear | Qatar Tribune, found from title/H1 prefixes |
+| The Peninsula Qatar | Partially clear | The Peninsula Qatar, still partial: title evidence alone |
+
+Eight new identity tests cover corroboration, aliases, taglines, hyphenated brands, generic labels, similar-but-distinct names and duplicate IDs. All 40 tests and typecheck pass; lint has the same six pre-existing warnings. Offering and the other question outputs remain unchanged.
+
+Remaining identity limitations: title/headline names can describe a page topic or product instead of its organization; schema, logo and richer organizational context are still needed. Confidence weights remain heuristics, not probabilities. The legacy server identity interpreter is still separate. Complex domain suffixes/subdomains are deliberately not guessed. This is a bounded correctness improvement, not completion of identity understanding or public-launch approval. The hosted saved-report preview is unchanged.

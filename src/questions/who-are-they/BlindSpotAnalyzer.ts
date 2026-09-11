@@ -51,7 +51,7 @@ export function analyzeBlindSpots(
         "Multiple brand-name candidates were extracted, but weighted evidence did not converge on one answer.",
       detect: () =>
         confidence.status !== "found" &&
-        confidence.rankedCandidates.length > 1,
+        confidence.rankedCandidates.filter(candidate => candidate.sourceTypes.some(source => source !== "domain")).length > 1,
     },
     {
       id: "domain-only",

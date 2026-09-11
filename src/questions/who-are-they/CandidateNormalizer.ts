@@ -6,7 +6,8 @@ import type {
 /**
  * Groups equivalent brand candidates by a deterministic normalized key.
  *
- * Normalization is trim + lowercase only — no stemming, fuzzy matching, or AI.
+ * Keys use whitespace/case normalization and explicit hostname aliases supplied
+ * by the extractor — no stemming, fuzzy matching, or AI.
  */
 export function normalizeCandidates(
   candidates: RawBrandCandidate[],
