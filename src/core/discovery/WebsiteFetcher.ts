@@ -1,129 +1,101 @@
-/** Default request timeout in milliseconds when none is configured. */
-const DEFAULT_TIMEOUT_MS = 15_000;
-
-/** HTTP and HTTPS are the only schemes accepted for public website fetches. */
-const ALLOWED_PROTOCOLS = new Set(["http:", "https:"]);
+import http, { type IncomingMessage, type RequestOptions } from "node:http";
+import https from "node:https";
+import { AddressResolver, parsePublicWebsiteUrl, resolveAddresses, resolvePublicAddress, WebsiteFetchError } from "./PublicWebsitePolicy";
 
 export interface WebsiteFetcherOptions {
-  /** Maximum time to wait for a response before aborting the request. */
   timeoutMs?: number;
+  maxBytes?: number;
+  maxRedirects?: number;
 }
+export interface WebsitePage { html: string; finalUrl: string }
+const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 
-/**
- * Downloads raw HTML from public websites using the native Fetch API.
- *
- * WebsiteFetcher is a transport layer only — it validates the URL, performs
- * the HTTP request, and returns the response body as a string. It does not
- * parse HTML, inspect content, or invoke any AI models.
- */
+/** Node-only transport. No ambient proxy, cookies, authentication, or automatic redirects. */
 export class WebsiteFetcher {
   private readonly timeoutMs: number;
-
-  /**
-   * Creates a fetcher instance.
-   *
-   * @param options - Optional configuration such as request timeout duration.
-   */
-  constructor(options: WebsiteFetcherOptions = {}) {
-    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  private readonly maxBytes: number;
+  private readonly maxRedirects: number;
+  constructor(options: WebsiteFetcherOptions = {}, private readonly resolver: AddressResolver = resolveAddresses) {
+    this.timeoutMs = options.timeoutMs ?? 15_000;
+    this.maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
+    this.maxRedirects = options.maxRedirects ?? 5;
+    if (!Number.isInteger(this.timeoutMs) || this.timeoutMs < 1 || this.timeoutMs > 60_000 ||
+        !Number.isInteger(this.maxBytes) || this.maxBytes < 1 || this.maxBytes > 10 * 1024 * 1024 ||
+        !Number.isInteger(this.maxRedirects) || this.maxRedirects < 0 || this.maxRedirects > 10) {
+      throw new Error("Invalid website collector limits.");
+    }
   }
 
-  /**
-   * Downloads and returns the raw HTML for the given URL.
-   *
-   * Validates the URL, issues a GET request, enforces a timeout, and rejects
-   * non-successful HTTP responses. The returned string is the unmodified
-   * response body — no parsing or analysis is performed.
-   *
-   * @param url - Absolute HTTP or HTTPS URL of the page to download.
-   * @returns The response body as a raw HTML string.
-   * @throws When the URL is invalid, the network fails, the request times out,
-   *   or the server returns a non-200 status code.
-   */
-  async fetchHtml(url: string): Promise<string> {
-    const parsedUrl = this.parseUrl(url);
+  async fetchHtml(input: string): Promise<string> { return (await this.fetchPage(input)).html; }
+
+  async fetchPage(input: string): Promise<WebsitePage> {
+    let url = parsePublicWebsiteUrl(input);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
-
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const seen = new Set<string>();
     try {
-      const response = await fetch(parsedUrl.toString(), {
-        method: "GET",
-        signal: controller.signal,
-        headers: {
-          Accept: "text/html,application/xhtml+xml",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `Request failed with status ${response.status} for ${parsedUrl.toString()}`,
-        );
+      for (let redirects = 0; ; redirects++) {
+        if (seen.has(url.href)) throw new WebsiteFetchError("The website has a redirect loop.");
+        seen.add(url.href);
+        const address = await resolvePublicAddress(url.hostname, controller.signal, this.resolver);
+        const response = await this.request(url, address, controller.signal);
+        try {
+          if (REDIRECTS.has(response.statusCode ?? 0)) {
+            if (redirects >= this.maxRedirects) throw new WebsiteFetchError("The website redirects too many times.");
+            const location = response.headers.location;
+            if (!location) throw new WebsiteFetchError("The website returned an incomplete redirect.");
+            let target: URL;
+            try { target = new URL(location, url); }
+            catch { throw new WebsiteFetchError("The website returned an invalid redirect."); }
+            const next = parsePublicWebsiteUrl(target.href);
+            if (url.protocol === "https:" && next.protocol !== "https:") throw new WebsiteFetchError("The website redirects to an insecure connection.");
+            url = next;
+            continue;
+          }
+          if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
+            throw new WebsiteFetchError(`The website returned HTTP ${response.statusCode ?? "error"}.`);
+          }
+          const mime = response.headers["content-type"]?.split(";", 1)[0].trim().toLowerCase();
+          if (mime !== "text/html" && mime !== "application/xhtml+xml") throw new WebsiteFetchError("The website did not return an HTML page.");
+          // Request uncompressed data; reject servers that ignore that request, avoiding decompression bombs.
+          const encoding = response.headers["content-encoding"]?.toLowerCase();
+          if (encoding && encoding !== "identity") throw new WebsiteFetchError("The website returned an unsupported content encoding.");
+          if (Number(response.headers["content-length"] ?? 0) > this.maxBytes) throw new WebsiteFetchError("The page exceeds the scan size limit.");
+          let size = 0;
+          const chunks: Buffer[] = [];
+          for await (const chunk of response) {
+            controller.signal.throwIfAborted();
+            const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            size += bytes.length;
+            if (size > this.maxBytes) throw new WebsiteFetchError("The page exceeds the scan size limit.");
+            chunks.push(bytes);
+          }
+          return {html: Buffer.concat(chunks).toString("utf8"), finalUrl: url.href};
+        } finally { response.destroy(); }
       }
-
-      return await response.text();
     } catch (error) {
-      throw this.toFetchError(error, parsedUrl.toString());
-    } finally {
-      clearTimeout(timeoutId);
-    }
+      if (controller.signal.aborted) throw new WebsiteFetchError("The website took too long to respond. Please try again.");
+      if (error instanceof WebsiteFetchError) throw error;
+      throw new WebsiteFetchError("The website could not be reached securely. Please check the URL and try again.");
+    } finally { clearTimeout(timer); }
   }
 
-  /**
-   * Parses and validates that a string is a usable HTTP or HTTPS URL.
-   *
-   * Rejects empty input, malformed URLs, and unsupported schemes such as
-   * `file:` or `javascript:` before any network request is attempted.
-   *
-   * @param url - Raw URL string supplied by the caller.
-   * @returns A validated {@link URL} instance.
-   * @throws When the string is empty, syntactically invalid, or uses a
-   *   disallowed protocol.
-   */
-  private parseUrl(url: string): URL {
-    const trimmed = url.trim();
-
-    if (!trimmed) {
-      throw new Error("URL must not be empty");
-    }
-
-    let parsed: URL;
-
-    try {
-      parsed = new URL(trimmed);
-    } catch {
-      throw new Error(`Invalid URL: ${trimmed}`);
-    }
-
-    if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
-      throw new Error(
-        `Unsupported URL protocol "${parsed.protocol}" — only HTTP and HTTPS are allowed`,
-      );
-    }
-
-    return parsed;
-  }
-
-  /**
-   * Normalizes low-level fetch failures into descriptive, caller-facing errors.
-   *
-   * Distinguishes timeout aborts from other network or runtime failures so
-   * upstream code can report meaningful messages without inspecting cause chains.
-   *
-   * @param error - The error thrown by fetch or response handling.
-   * @param url - The validated URL that was requested.
-   * @returns A new {@link Error} with a human-readable message.
-   */
-  private toFetchError(error: unknown, url: string): Error {
-    if (error instanceof Error && error.name === "AbortError") {
-      return new Error(
-        `Request timed out after ${this.timeoutMs}ms for ${url}`,
-      );
-    }
-
-    if (error instanceof Error) {
-      return error;
-    }
-
-    return new Error(`Network request failed for ${url}`);
+  private request(url: URL, address: {address: string; family: number}, signal: AbortSignal): Promise<IncomingMessage> {
+    return new Promise((resolve, reject) => {
+      const transport = url.protocol === "https:" ? https : http;
+      const options: RequestOptions & {autoSelectFamily: false} = {
+        method: "GET", agent: false, signal, maxHeaderSize: 16 * 1024,
+        autoSelectFamily: false,
+        lookup: (_hostname, _options, callback) => callback(null, address.address, address.family),
+        headers: {Accept: "text/html,application/xhtml+xml", "Accept-Encoding": "identity", "User-Agent": "AiEON/0.1 (website understanding scan)"},
+      };
+      const request = transport.request(url, options, resolve);
+      request.on("error", reject);
+      request.on("upgrade", (_response, socket) => {
+        socket.destroy();
+        reject(new WebsiteFetchError("The website did not return an HTML page."));
+      });
+      request.end();
+    });
   }
 }

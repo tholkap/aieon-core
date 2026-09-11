@@ -44,7 +44,11 @@ try {
     assert.equal(response.status, 200);
     return response.text();
   };
-  assert.match(await invoke("ftp://example.com/"), /only HTTP and HTTPS are allowed/);
+  assert.match(await invoke("ftp://example.com/"), /Only HTTP and HTTPS website URLs are allowed/);
+  assert.match(await invoke(null), /Enter a website URL/);
+  assert.match(await invoke("http://169.254.169.254/"), /Only publicly accessible website addresses/);
+  assert.match(await invoke("https://user:secret@example.com/"), /without credentials or a custom port/);
+  assert.ok(!logs.includes("user:secret"), "Credentials must not be logged");
   if (process.argv.includes("--live")) {
     const result = await invoke("https://www.apple.com/");
     assert.match(result, /"observations":\[/);

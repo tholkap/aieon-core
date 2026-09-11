@@ -18,8 +18,8 @@ interface DiscoveryLogEntry {
   /** ISO 8601 timestamp of when the event occurred. */
   timestamp: string;
 
-  /** Absolute URL of the website under discovery. */
-  url: string;
+  /** Target hostname only; omit URL credentials, paths and queries. */
+  targetHost: string;
 
   /** Optional metadata specific to the event (e.g. byte length, counts). */
   [key: string]: string | number;
@@ -70,13 +70,13 @@ export class DiscoveryRunner {
   async run(url: string): Promise<DiscoveryRunResult> {
     this.log("fetch_started", url);
 
-    const html = await this.fetcher.fetchHtml(url);
+    const { html, finalUrl } = await this.fetcher.fetchPage(url);
 
     this.log("fetch_completed", url, { htmlLength: html.length });
 
     this.log("parsing_started", url);
 
-    const observations = this.parser.parse(html, url);
+    const observations = this.parser.parse(html, finalUrl);
 
     this.log("parsing_completed", url, {
       observationCount: observations.length,
@@ -101,7 +101,7 @@ export class DiscoveryRunner {
   /**
    * Emits a single structured JSON log line for observability and debugging.
    *
-   * Each entry includes a stable event name, ISO timestamp, target URL, and
+   * Each entry includes a stable event name, ISO timestamp, target hostname, and
    * any stage-specific metadata supplied by the caller.
    */
   private log(
@@ -112,7 +112,7 @@ export class DiscoveryRunner {
     const entry: DiscoveryLogEntry = {
       event,
       timestamp: new Date().toISOString(),
-      url,
+      targetHost: (() => { try { return new URL(url).hostname; } catch { return "invalid"; } })(),
       ...metadata,
     };
 

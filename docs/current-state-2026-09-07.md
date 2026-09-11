@@ -1,5 +1,7 @@
 # AiEON: inspected state and first engineering milestone
 
+Transport follow-up: see [launch readiness](launch-readiness.md) for the secured collector and remaining deployment validation. This document records the original assessment.
+
 Inspected baseline: `6af2dedc43d5ec69b3bdac1a5ccb9e6638d8d425` on `main`.
 Runtime: Next.js 16.3.0 / Turbopack, React 19.2.8, TypeScript, Cheerio; validated locally with Node 24.19.0.
 This is an existing, functioning deterministic prototype. It is not ready for an unrestricted public launch.
