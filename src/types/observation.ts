@@ -25,6 +25,8 @@ export type ObservationSourceType =
   | "h2"
   /** `<h3>` element text. */
   | "h3"
+  /** Eligible body paragraph text; excludes explicitly hidden and quoted regions. */
+  | "paragraph"
   /** Anchor text from a link inside `<nav>`. */
   | "navigation-link"
   /** Anchor text from a link inside `<footer>`. */
@@ -49,6 +51,7 @@ export type ObservationSourceType =
 /** Structural source types emitted by {@link HtmlParser}. */
 export type HtmlParserSourceType = Extract<
   ObservationSourceType,
+  | "paragraph"
   | "title"
   | "meta-description"
   | "h1"

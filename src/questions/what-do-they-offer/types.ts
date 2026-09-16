@@ -3,7 +3,7 @@ import type { Evidence, RankedCandidate } from "@/src/questions/shared/Evidence"
 import type { Recommendation } from "@/src/questions/shared/Recommendation";
 import type { BusinessQuestionStatus } from "@/src/questions/shared/types";
 
-/** Deterministic evidence weights for primary offering sources (sum = 100). */
+/** Existing heuristic source weights; these are not calibrated probabilities. */
 export const OFFERING_EVIDENCE_WEIGHTS = {
   "hero-main-headline": 35,
   "supporting-meta": 25,
@@ -14,6 +14,8 @@ export const OFFERING_EVIDENCE_WEIGHTS = {
   "observation-meta": 25,
   "observation-h2": 20,
   "observation-h3": 15,
+  // Same supporting-copy weight as H3; repeated paragraph wording is deduplicated.
+  "observation-paragraph": 15,
   "observation-cta": 10,
 } as const;
 

@@ -7,6 +7,7 @@ const SOURCE_LABELS: Record<Observation["sourceType"], string> = {
   h1: "Main heading (H1)",
   h2: "Section heading (H2)",
   h3: "Subsection heading (H3)",
+  paragraph: "Body paragraph",
   "navigation-link": "Navigation link",
   "footer-link": "Footer link",
   button: "Button",
