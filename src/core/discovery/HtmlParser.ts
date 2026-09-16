@@ -33,6 +33,9 @@ interface IndexedExtractionRule {
 }
 
 const DIRECT_EXTRACTION_CONFIDENCE = 1;
+const EXCLUDED_PARAGRAPH_REGIONS = 'article, blockquote, q, nav, footer, header, aside, dialog, template, noscript, script, style, [hidden], [inert], [aria-hidden="true"]';
+const MAX_PARAGRAPHS = 200;
+const MAX_PARAGRAPH_LENGTH = 2000;
 
 const readElementText = ($element: Cheerio<AnyNode>): string => $element.text();
 
@@ -61,6 +64,7 @@ const INDEXED_EXTRACTIONS: ReadonlyArray<IndexedExtractionRule> = [
   { selector: "footer a", sourceType: "footer-link", readValue: readElementText },
   { selector: "button", sourceType: "button", readValue: readElementText },
   { selector: "li", sourceType: "list-item", readValue: readElementText },
+  { selector: "p", sourceType: "paragraph", readValue: readElementText },
 ];
 
 /**
@@ -105,13 +109,28 @@ export class HtmlParser {
     context: ExtractionContext,
     rule: IndexedExtractionRule,
   ): void {
+    let paragraphCount = 0;
     $(rule.selector).each((index, element) => {
+      const $element = $(element);
+      const rawValue = rule.readValue($element).trim();
+      if (rule.sourceType === "paragraph") {
+        if (paragraphCount >= MAX_PARAGRAPHS) return false;
+        // Template contents live in detached document fragments in parse5.
+        if (!$element.parents("html").length || !rawValue || rawValue.length > MAX_PARAGRAPH_LENGTH ||
+          $element.closest(EXCLUDED_PARAGRAPH_REGIONS).length ||
+          $element.find(EXCLUDED_PARAGRAPH_REGIONS).length) return;
+        // Static HTML only: stylesheet/computed visibility is not available here.
+        const inlineHidden = $element.parents().addBack().toArray().some((node) =>
+          /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:!important\s*)?(?:;|$)/i.test($(node).attr("style") ?? ""));
+        if (inlineHidden) return;
+        paragraphCount++;
+      }
       this.appendObservation(context.observations, {
         pageUrl: context.pageUrl,
         discoveredAt: context.discoveredAt,
         selector: this.createIndexedSelector(rule.selector, index),
         sourceType: rule.sourceType,
-        rawValue: rule.readValue($(element)).trim(),
+        rawValue,
       });
     });
   }

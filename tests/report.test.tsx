@@ -53,3 +53,17 @@ test("crawled markup is rendered as text, not executable markup", () => {
   assert.ok(html.includes("&lt;script&gt;"));
   assert.ok(!html.includes('<script>alert("injection")</script>'));
 });
+
+test("body offering appears in the customer report with its exact source", () => {
+  const copy = "We provide accounting services for small businesses.";
+  const report = reportFrom(`<h1>Northstar</h1><main><p>${copy}</p></main>`);
+  const offering = report.questions.find((q) => q.id === "what")!;
+  assert.equal(offering.summary, copy);
+  assert.equal(offering.status, "partial");
+  assert.equal(offering.sources?.[0].sourceType, "paragraph");
+  assert.equal(offering.sources?.[0].selector, "p@0");
+  assert.equal(offering.sources?.[0].quote, copy);
+  const rendered = renderToStaticMarkup(<AiUnderstandingReportView report={report} />);
+  assert.ok(rendered.includes(copy));
+  assert.match(rendered, /How we determined this/);
+});

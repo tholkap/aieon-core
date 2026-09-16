@@ -22,14 +22,29 @@ function isOfferingDescription(value: string): boolean {
     OFFERING_DESCRIPTION.test(value);
 }
 
+/** Body copy needs an explicit first-person offer, not merely an industry word. */
+function isDirectOfferingParagraph(value: string): boolean {
+  return /^we\s+(?:provide|offer|sell|manufacture|speciali[sz]e in)\s+\S/i.test(value.trim()) &&
+    !/[?“”"]|\b(?:no|not|never|nothing)\b/i.test(value) && isOfferingDescription(value);
+}
+
 /** Select descriptive copy, never a title, arbitrary heading, or CTA alone. */
 export function extractOfferingCandidates({ observations }: ExtractOfferingInput): RawOfferingCandidate[] {
+  const paragraphValues = new Set<string>();
   return observations
-    .filter((o) => (o.sourceType === "h1" || o.sourceType === "meta-description") && isOfferingDescription(o.rawValue))
+    .filter((o) => {
+      if (o.sourceType === "paragraph") {
+        const key = normalize(o.rawValue);
+        if (!isDirectOfferingParagraph(o.rawValue) || paragraphValues.has(key)) return false;
+        paragraphValues.add(key);
+        return true;
+      }
+      return (o.sourceType === "h1" || o.sourceType === "meta-description") && isOfferingDescription(o.rawValue);
+    })
     .map((o) => ({
       value: o.rawValue.trim(),
       normalized: normalize(o.rawValue),
-      sourceType: o.sourceType === "h1" ? "observation-h1" : "observation-meta",
+      sourceType: o.sourceType === "paragraph" ? "observation-paragraph" : o.sourceType === "h1" ? "observation-h1" : "observation-meta",
       observationId: o.id,
       selector: o.selector,
       rawValue: o.rawValue,
