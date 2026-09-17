@@ -42,3 +42,5 @@ jobs:
         run: npm run build
       - name: Check production routes and rejected scan inputs
         run: npm run smoke
+      - name: Check missing pilot credentials fail closed
+        run: npm run smoke -- --unconfigured

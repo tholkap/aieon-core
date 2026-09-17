@@ -1,5 +1,7 @@
 "use server";
 
+import { headers } from "next/headers";
+import { pilotAccess } from "@/src/server/pilot-access";
 import { acquireScanCapacity } from "@/src/core/discovery/ScanCapacity";
 import { parsePublicWebsiteUrl, WebsiteFetchError } from "@/src/core/discovery/PublicWebsitePolicy";
 import { DiscoveryRunner } from "@/src/core/discovery/DiscoveryRunner";
@@ -19,6 +21,9 @@ export type DiscoveryResult =
 export async function runDiscovery(url: unknown): Promise<DiscoveryResult> {
   let release: (() => void) | undefined;
   try {
+    if (pilotAccess((await headers()).get("authorization")) !== "authorized") {
+      return { error: "Sign in to the AiEON private pilot before scanning." };
+    }
     const parsed = parsePublicWebsiteUrl(url);
     release = acquireScanCapacity();
     const runner = new DiscoveryRunner();
