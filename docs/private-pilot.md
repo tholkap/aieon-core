@@ -7,7 +7,7 @@ This branch is a private test deployment, not a public SaaS launch. The six-ques
 - Node web service; Free compute for founder testing only.
 - Branch: codex/protected-pilot-deployment
 - Root directory: blank.
-- Build: `npm ci && npm test && npm run typecheck && npm run lint && npm run build && npm run smoke && npm run smoke -- --unconfigured`
+- Build: `npm ci --include=dev && npm test && npm run typecheck && npm run lint && npm run build && npm run smoke && npm run smoke -- --unconfigured`
 - Start: `npm run start -- --hostname 0.0.0.0`
 - PORT: 10000
 - NODE_VERSION: 24.19.0
@@ -31,3 +31,5 @@ CI runs tests, types, lint, build, authenticated server smoke checks, unauthoriz
 After deployment, verify HTTPS, anonymous rejection, successful founder login, assets and client interaction. Scan Apple, Walmart, a news publisher and a service business; distinguish access/collection failures from missing business evidence. Capture the actual customer reports and examine semantic quality. No claim of production readiness follows from CI alone.
 
 Free hosting can sleep and has resource limits. No paid upgrade is authorized by this document.
+
+Build tools are development dependencies. Keep NODE_ENV=production and explicitly include development dependencies during installation; otherwise npm can omit Tailwind, TypeScript and the test runner.
