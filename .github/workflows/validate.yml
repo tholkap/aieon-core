@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: "1"
+      NODE_ENV: production
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -31,7 +32,7 @@ jobs:
           node-version: "24.19.0"
           cache: npm
       - name: Install locked dependencies
-        run: npm ci
+        run: npm ci --include=dev
       - name: Test evidence and collector behavior
         run: npm test
       - name: Check TypeScript
@@ -44,3 +45,5 @@ jobs:
         run: npm run smoke
       - name: Check missing pilot credentials fail closed
         run: npm run smoke -- --unconfigured
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
