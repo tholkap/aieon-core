@@ -29,6 +29,11 @@ const REVIEW_COPY: Record<string, { title: string; impact: string; improvement: 
     impact: "AiEON found limited offering evidence. A product name or slogan alone does not explain what a business provides.",
     improvement: "Review the quoted offering evidence. If your homepage lacks a clear product or service description, add one and reflect it in the page description. Rescan to check whether AiEON identifies the change; identical wording is not required for good communication.",
   },
+  audience: {
+    title: "Audience description needs review",
+    impact: "AiEON did not find a clear audience statement using its current English wording checks on this page. This can be a coverage limitation.",
+    improvement: "Review who your offering is intended for. If that is not stated, add an accurate audience sentence near the offering description and rescan. Do not rewrite clear existing copy just to match AiEON.",
+  },
   action: {
     title: "Customer actions need review",
     impact: "No explicit action wording was identified in the buttons, navigation, and footer checked. Other links are not covered by this check yet.",
