@@ -7,6 +7,7 @@ export interface Recommendation {
   id: string; title: string; description: string; relatedQuestion: string;
 }
 export interface AiUnderstandingReport {
+  interpretation?: import("@/src/interpretation/types").InterpretationResult;
   websiteUrl: string;
   scannedAt: string;
   brandName: string | null;

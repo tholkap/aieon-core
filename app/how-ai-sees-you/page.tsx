@@ -12,6 +12,7 @@ import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
 
 export default function HowAiSeesYouPage() {
+  const [includeInterpretation, setIncludeInterpretation] = useState(false);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,13 +34,13 @@ export default function HowAiSeesYouPage() {
     setReport(null);
 
     try {
-      const result = await runDiscovery(submittedUrl);
+      const result = await runDiscovery(submittedUrl, includeInterpretation);
       if ("error" in result) {
         setError(result.error);
       } else {
         setObservations(result.observations);
         setResolvedIdentity(result.resolvedIdentity);
-        setReport(mapDiscoveryToAiUnderstanding(submittedUrl, result.observations, result.resolvedIdentity));
+        setReport({ ...mapDiscoveryToAiUnderstanding(submittedUrl, result.observations, result.resolvedIdentity), interpretation: result.interpretation });
       }
     } catch {
       setError("The scan could not be completed. Please try again.");
@@ -75,6 +76,11 @@ export default function HowAiSeesYouPage() {
           onUrlChange={setUrl}
           onSubmit={handleAnalyze}
         />
+
+        <label className="mt-6 flex items-start gap-3 text-sm text-white/65">
+          <input type="checkbox" checked={includeInterpretation} disabled={loading} onChange={(event) => setIncludeInterpretation(event.target.checked)} className="mt-1" />
+          <span>Include AI interpretation (pilot). When activated, selected public-page text is sent to OpenAI to suggest improvements. Suggestions require your review.</span>
+        </label>
 
         {loading && (
           <div

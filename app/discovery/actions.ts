@@ -1,5 +1,7 @@
 "use server";
 
+import { runInterpretation } from "@/src/interpretation/runInterpretation";
+import type { InterpretationResult } from "@/src/interpretation/types";
 import { headers } from "next/headers";
 import { pilotAccess } from "@/src/server/pilot-access";
 import { acquireScanCapacity } from "@/src/core/discovery/ScanCapacity";
@@ -9,7 +11,7 @@ import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
 
 export type DiscoveryResult =
-  | { observations: Observation[]; resolvedIdentity: ResolvedIdentity }
+  | { observations: Observation[]; resolvedIdentity: ResolvedIdentity; interpretation?: InterpretationResult }
   | { error: string };
 
 /**
@@ -18,7 +20,7 @@ export type DiscoveryResult =
  * Fetching external websites must happen server-side to avoid browser CORS
  * restrictions. Identity interpretation uses deterministic rules only.
  */
-export async function runDiscovery(url: unknown): Promise<DiscoveryResult> {
+export async function runDiscovery(url: unknown, includeInterpretation: unknown = false): Promise<DiscoveryResult> {
   let release: (() => void) | undefined;
   try {
     if (pilotAccess((await headers()).get("authorization")) !== "authorized") {
@@ -28,7 +30,8 @@ export async function runDiscovery(url: unknown): Promise<DiscoveryResult> {
     release = acquireScanCapacity();
     const runner = new DiscoveryRunner();
     const { observations, resolvedIdentity } = await runner.run(parsed.href);
-    return { observations, resolvedIdentity };
+    const interpretation = includeInterpretation === true ? await runInterpretation(observations) : undefined;
+    return { observations, resolvedIdentity, interpretation };
   } catch (error) {
     return { error: error instanceof WebsiteFetchError
       ? error.message
