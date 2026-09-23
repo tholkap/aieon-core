@@ -33,3 +33,13 @@ Automated transport tests use mocked Responses API outputs, including fabricated
 Replay the four existing captured sites to guard deterministic behavior. Before deploying an enabled version, run real model evaluations across retailer, publisher, SaaS, florist, and professional-service pages, with injected instructions and misleading quotations. Review whether each finding is supported, consequential and actionable; zero substantive findings is acceptable. Record model/version, evidence reference, latency and usage. Compare against the deterministic-only report. Browser interaction QA and live provider quality remain outstanding until activation/access.
 
 Current scope is single-page HTML; no JavaScript rendering, external fact verification, multi-model consensus, saved histories, or live AI-search recommendation measurement. Trust and differentiation remain unassessed in the deterministic layer. This milestone does not establish commercial readiness.
+
+## Gemini free-tier pilot update — 23 September 2026
+
+Gemini is now the default provider. Set GEMINI_API_KEY and AIEON_AI_ENABLED=true. The adapter pins gemini-2.5-flash using generateContent, JSON schema output, one candidate, 2,400 output tokens and disabled thinking for a bounded initial pilot. Existing timeout, byte cap, exact-citation validation and request ceiling apply. Truncated, blocked and malformed responses fail closed. No retries or provider fallback occur.
+
+Use a Google AI Studio project on the Free Tier without linked billing. The application cannot verify Google's billing tier; this must be checked in AI Studio. Eligible free usage and quotas are provider-controlled and may change. Never promise that the API key itself guarantees no charges if billing is subsequently linked. Public non-confidential page text only: Google may use free-tier data to improve products. The opt-in disclosure now explains this.
+
+AIEON_AI_PROVIDER=gemini is optional because it is the default. OpenAI requires explicit AIEON_AI_PROVIDER=openai plus its existing key/model settings, and is not authorized for this free pilot. AIEON_AI_MODEL does not override the pinned Gemini model.
+
+Official references consulted: https://ai.google.dev/api/generate-content and https://ai.google.dev/gemini-api/docs/pricing . Transport compatibility is tested with mocked responses; real account access and live model quality still require a scan on Render with the privately configured credential.

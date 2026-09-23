@@ -9,7 +9,7 @@ const observations = new HtmlParser().parse('<title>Florist</title><p>We offer s
 const snapshot = evidenceSnapshot(observations);
 const citation = { sourceId: observations.find(o => o.sourceType === 'paragraph')!.id, quote: 'We offer same-day flower delivery in Doha.' };
 const content = { summary: 'The page advertises flower delivery in Doha.', summaryCitations: [citation], findings: [{ title: 'Clarify delivery timing', explanation: 'The cutoff is not established in the supplied content.', customerQuestion: 'Can I order for this evening?', suggestedChange: 'Add your actual cutoff: [confirm cutoff].', factsToConfirm: 'Confirm delivery cutoff and exceptions.', citations: [citation] }] };
-const env = { AIEON_AI_ENABLED: 'true', AIEON_AI_MODEL: 'test-model', OPENAI_API_KEY: 'fake-test-key' };
+const env = { AIEON_AI_PROVIDER: 'openai', AIEON_AI_ENABLED: 'true', AIEON_AI_MODEL: 'test-model', OPENAI_API_KEY: 'fake-test-key' };
 const response = (value: unknown = content, status = 'completed') => new Response(JSON.stringify({ status, model: 'test-model', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(value) }] }] }));
 test('snapshot is bounded, stable across timestamps, and discloses omitted evidence', () => {
  assert.equal(snapshot.snapshotId, evidenceSnapshot(observations.map(o => ({...o, discoveredAt: 'different'}))).snapshotId);

@@ -79,7 +79,7 @@ export default function HowAiSeesYouPage() {
 
         <label className="mt-6 flex items-start gap-3 text-sm text-white/65">
           <input type="checkbox" checked={includeInterpretation} disabled={loading} onChange={(event) => setIncludeInterpretation(event.target.checked)} className="mt-1" />
-          <span>Include AI interpretation (pilot). When activated, selected public-page text is sent to OpenAI to suggest improvements. Suggestions require your review.</span>
+          <span>Include AI interpretation (pilot). When activated, selected public-page text is sent to the configured AI provider (Google Gemini for this pilot) to suggest improvements. Google may use free-tier content to improve its products. Use public, non-confidential pages only. Suggestions require your review.</span>
         </label>
 
         {loading && (
