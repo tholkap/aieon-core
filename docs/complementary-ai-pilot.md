@@ -43,3 +43,9 @@ Use a Google AI Studio project on the Free Tier without linked billing. The appl
 AIEON_AI_PROVIDER=gemini is optional because it is the default. OpenAI requires explicit AIEON_AI_PROVIDER=openai plus its existing key/model settings, and is not authorized for this free pilot. AIEON_AI_MODEL does not override the pinned Gemini model.
 
 Official references consulted: https://ai.google.dev/api/generate-content and https://ai.google.dev/gemini-api/docs/pricing . Transport compatibility is tested with mocked responses; real account access and live model quality still require a scan on Render with the privately configured credential.
+
+## Failure diagnostics
+
+Failed AI calls now return only allowlisted diagnostic categories: access rejection (401/403), request rejection (400), model/endpoint missing (404), provider quota (429), service error, timeout, network failure, blocked/incomplete output, unreadable format, output validation failure, oversize response or empty evidence. The UI explicitly states that only the deterministic report is shown. Raw provider error bodies, secrets and page text are not logged or returned. A category narrows investigation; it does not establish the root cause (for example, HTTP 400 can involve request or key configuration).
+
+This change diagnoses the reported live failure; it does not claim to have repaired an unobserved provider/account issue. No automatic paid fallback or retry is added.

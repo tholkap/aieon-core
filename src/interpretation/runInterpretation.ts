@@ -1,7 +1,11 @@
 import type { Observation } from "../types/observation";
-import type { InterpretationResult } from "./types";
+import type { InterpretationResult, InterpretationFailure } from "./types";
 import { evidenceSnapshot, validateInterpretation } from "./evidence";
 import { instructions, PROMPT_VERSION, schema } from "./prompt";
+
+class InterpretationError extends Error {
+  constructor(readonly reason: InterpretationFailure) { super(reason); }
+}
 
 // Private-pilot guard only; restarts reset it. Provider project spend limits are still required.
 let windowStart = Date.now();
@@ -15,7 +19,7 @@ export async function runInterpretation(observations: Observation[], env: Record
   if (Date.now() - windowStart >= 3600000) { windowStart = Date.now(); calls = 0; }
   if (calls >= 10) return { status: "limited" };
   const snapshot = evidenceSnapshot(observations);
-  if (!snapshot.sources.length) return { status: "unavailable" };
+  if (!snapshot.sources.length) return { status: "unavailable", reason: "empty" };
   calls++;
   try {
     const endpoint = provider === "gemini"
@@ -34,14 +38,18 @@ export async function runInterpretation(observations: Observation[], env: Record
       headers,
       body: JSON.stringify(body),
     });
-    if (!response.ok || !response.body) throw new Error("Provider unavailable");
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new InterpretationError(response.status === 429 ? "quota" : [401, 403].includes(response.status) ? "access" : response.status === 404 ? "model" : response.status === 400 ? "request" : "provider");
+    }
+    if (!response.body) throw new InterpretationError("format");
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = []; let bytes = 0;
     try {
       while (true) {
         const { value, done } = await reader.read(); if (done) break;
         bytes += value.byteLength;
-        if (bytes > 128000) throw new Error("Response too large");
+        if (bytes > 128000) throw new InterpretationError("size");
         chunks.push(value);
       }
     } finally { await reader.cancel(); }
@@ -49,13 +57,22 @@ export async function runInterpretation(observations: Observation[], env: Record
     let texts: string[];
     if (provider === "gemini") {
       const candidate = data.candidates?.[0];
-      if (data.promptFeedback?.blockReason || candidate?.finishReason !== "STOP" || !Array.isArray(candidate?.content?.parts)) throw new Error("Incomplete Gemini response");
+      if (data.promptFeedback?.blockReason || ["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT"].includes(candidate?.finishReason)) throw new InterpretationError("blocked");
+      if (candidate?.finishReason !== "STOP" || !Array.isArray(candidate?.content?.parts)) throw new InterpretationError("incomplete");
       texts = candidate.content.parts.filter((p: { text?: unknown; thought?: boolean }) => typeof p.text === "string" && !p.thought).map((p: { text: string }) => p.text);
     } else {
-      if (data.status !== "completed" || !Array.isArray(data.output)) throw new Error("Incomplete response");
+      if (data.status !== "completed" || !Array.isArray(data.output)) throw new InterpretationError("incomplete");
       texts = data.output.flatMap((item: { type?: string; content?: { type?: string; text?: string }[] }) => item.type === "message" && Array.isArray(item.content) ? item.content.filter((c) => c.type === "output_text" && typeof c.text === "string").map((c) => c.text) : []);
     }
-    const content = validateInterpretation(JSON.parse(texts.join("")), snapshot.sources);
+    const parsed = JSON.parse(texts.join(""));
+    let content;
+    try { content = validateInterpretation(parsed, snapshot.sources); }
+    catch { throw new InterpretationError("evidence"); }
     return { status: "complete", content, model: `${provider}: ${typeof data.modelVersion === "string" ? data.modelVersion : typeof data.model === "string" ? data.model : model}`, snapshotId: snapshot.snapshotId, promptVersion: PROMPT_VERSION, generatedAt: new Date().toISOString(), sourceCount: snapshot.sources.length, omittedCount: snapshot.omittedCount, sources: snapshot.sources };
-  } catch { return { status: "unavailable" }; }
+  } catch (error) {
+    const reason: InterpretationFailure = error instanceof InterpretationError ? error.reason
+      : error instanceof SyntaxError ? "format"
+      : error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name) ? "timeout" : "network";
+    return { status: "unavailable", reason };
+  }
 }
