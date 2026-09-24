@@ -8,6 +8,7 @@ export interface WebsiteFetcherOptions {
   maxRedirects?: number;
 }
 export interface WebsitePage { html: string; finalUrl: string }
+export interface WebsiteResource { body: string; finalUrl: string; contentType: string }
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 
 /** Node-only transport. No ambient proxy, cookies, authentication, or automatic redirects. */
@@ -29,6 +30,12 @@ export class WebsiteFetcher {
   async fetchHtml(input: string): Promise<string> { return (await this.fetchPage(input)).html; }
 
   async fetchPage(input: string): Promise<WebsitePage> {
+    const resource = await this.fetchResource(input, ["text/html", "application/xhtml+xml"]);
+    return { html: resource.body, finalUrl: resource.finalUrl };
+  }
+
+  /** Fetches a bounded textual resource through the same SSRF-safe transport. */
+  async fetchResource(input: string, allowedContentTypes: readonly string[]): Promise<WebsiteResource> {
     let url = parsePublicWebsiteUrl(input);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -56,7 +63,7 @@ export class WebsiteFetcher {
             throw new WebsiteFetchError(`The website returned HTTP ${response.statusCode ?? "error"}.`);
           }
           const mime = response.headers["content-type"]?.split(";", 1)[0].trim().toLowerCase();
-          if (mime !== "text/html" && mime !== "application/xhtml+xml") throw new WebsiteFetchError("The website did not return an HTML page.");
+          if (!mime || !allowedContentTypes.includes(mime)) throw new WebsiteFetchError("The website returned an unsupported content type.");
           // Request uncompressed data; reject servers that ignore that request, avoiding decompression bombs.
           const encoding = response.headers["content-encoding"]?.toLowerCase();
           if (encoding && encoding !== "identity") throw new WebsiteFetchError("The website returned an unsupported content encoding.");
@@ -70,7 +77,7 @@ export class WebsiteFetcher {
             if (size > this.maxBytes) throw new WebsiteFetchError("The page exceeds the scan size limit.");
             chunks.push(bytes);
           }
-          return {html: Buffer.concat(chunks).toString("utf8"), finalUrl: url.href};
+          return {body: Buffer.concat(chunks).toString("utf8"), finalUrl: url.href, contentType: mime};
         } finally { response.destroy(); }
       }
     } catch (error) {

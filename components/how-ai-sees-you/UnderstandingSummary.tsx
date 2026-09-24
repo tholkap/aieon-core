@@ -33,6 +33,26 @@ export default function UnderstandingSummary({
         </span>
       </div>
 
+      {report.coverage && (
+        <div className="mt-8 rounded-2xl border border-white/10 bg-black/10 p-5">
+          <h3 className="text-sm font-medium text-white">Crawl coverage</h3>
+          <p className="mt-2 text-sm leading-relaxed text-white/60">
+            Scanned {report.coverage.pagesScanned} of {report.coverage.pagesDiscovered} discovered internal pages
+            {report.coverage.pagesFailed ? `; ${report.coverage.pagesFailed} attempted pages could not be read` : ""}.
+            {report.coverage.limitReached
+              ? ` The configurable development limit of ${report.coverage.pageLimit} pages was reached, leaving ${report.coverage.pagesSkipped} discovered pages unscanned.`
+              : " All discovered pages were attempted."}
+            {report.coverage.sitemapUrls.length ? ` Checked ${report.coverage.sitemapUrls.length} sitemap location${report.coverage.sitemapUrls.length === 1 ? "" : "s"}.` : ""}
+          </p>
+          <details className="mt-3 text-xs text-white/45">
+            <summary className="cursor-pointer text-white/60">Pages included in this report</summary>
+            <ul className="mt-2 space-y-1 break-all">
+              {report.coverage.scannedUrls.map((pageUrl) => <li key={pageUrl}>{pageUrl}</li>)}
+            </ul>
+          </details>
+        </div>
+      )}
+
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-[#34D399]/20 bg-[#34D399]/5 px-5 py-4">
           <p className="text-3xl font-semibold text-[#34D399]">
