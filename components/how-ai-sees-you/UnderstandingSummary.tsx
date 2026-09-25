@@ -42,6 +42,8 @@ export default function UnderstandingSummary({
             {report.coverage.limitReached
               ? ` The configurable development limit of ${report.coverage.pageLimit} pages was reached, leaving ${report.coverage.pagesSkipped} discovered pages unscanned.`
               : " All discovered pages were attempted."}
+            {report.coverage.discoveryTruncated ? " Discovery was limited; these counts do not represent the entire website." : ""}
+            {report.coverage.duplicatePages ? ` ${report.coverage.duplicatePages} redirected duplicate pages were excluded from the evidence.` : ""}
             {report.coverage.sitemapUrls.length ? ` Checked ${report.coverage.sitemapUrls.length} sitemap location${report.coverage.sitemapUrls.length === 1 ? "" : "s"}.` : ""}
           </p>
           <details className="mt-3 text-xs text-white/45">

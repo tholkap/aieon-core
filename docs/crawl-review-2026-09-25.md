@@ -1,0 +1,7 @@
+# Crawl review — 25 September 2026
+
+PR #9 follow-up bounds sitemap fetches to 10 and retained page discoveries to 2,000. Existing 25 attempted-page and per-request transport limits remain. Root links are queued before sitemap entries. Content query parameters are preserved; only utm_*, gclid, fbclid and msclkid are removed. Redirect aliases are parsed and counted once per final URL; requests still consume the attempt budget. Coverage reports discovery truncation and duplicate responses explicitly.
+
+Validation: 93 tests pass, including chained sitemap bounds, root-link priority, content query provenance and redirect deduplication. Typecheck, production build and both protected/unconfigured server smoke checks pass. Lint has zero errors and seven existing warnings. Four saved HTML benchmarks replay successfully; they are single-page regression checks, not fresh multi-page accuracy validation. Shared Question Engine files are unchanged.
+
+Not deployment-ready: robots policy, a cancellable whole-scan deadline, aggregate byte/observation budgets, sitemap XML structure handling, relevant-page prioritization beyond root links, and live multi-page semantic evaluation remain. Current request counts are finite, but worst-case scans can still be slow. Generic recommendations with appended quotations are not yet the actionable diagnosis milestone. No whole-site completeness or commercial-readiness claim is justified. No deployment performed.

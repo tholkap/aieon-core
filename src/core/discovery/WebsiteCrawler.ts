@@ -5,6 +5,8 @@ import { WebsiteFetcher } from "@/src/core/discovery/WebsiteFetcher";
 import type { Observation } from "@/src/types/observation";
 
 export const DEVELOPMENT_MAX_PAGES = 25;
+const MAX_SITEMAPS = 10;
+const MAX_DISCOVERED_URLS = 2000;
 
 export function configuredPageLimit(value = process.env.AIEON_CRAWL_PAGE_LIMIT): number {
   if (value === undefined || value === "") return DEVELOPMENT_MAX_PAGES;
@@ -26,6 +28,8 @@ export interface CrawlCoverage {
   scannedUrls: string[];
   failedUrls: string[];
   sitemapUrls: string[];
+  discoveryTruncated: boolean;
+  duplicatePages: number;
 }
 
 export interface WebsiteCrawlResult { observations: Observation[]; coverage: CrawlCoverage }
@@ -36,7 +40,9 @@ function normalizedInternalUrl(raw: string, base: URL, siteOrigin: string): stri
     if (url.origin !== siteOrigin || !["http:", "https:"].includes(url.protocol)) return;
     if (/\.(?:avif|css|csv|docx?|gif|ico|jpe?g|js|json|mp3|mp4|pdf|png|svg|webp|xlsx?|zip)$/i.test(url.pathname)) return;
     url.hash = "";
-    url.search = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^(?:utm_.+|gclid|fbclid|msclkid)$/i.test(key)) url.searchParams.delete(key);
+    }
     return url.href;
   } catch { return; }
 }
@@ -85,7 +91,17 @@ export class WebsiteCrawler {
     const root = new URL(first.finalUrl);
     const siteOrigin = root.origin;
     const queue = [root.href];
+    let discoveryTruncated = false;
+    let duplicatePages = 0;
+    const finalUrls = new Set<string>();
     const discovered = new Set(queue);
+    const enqueue = (url: string) => {
+      if (discovered.has(url)) return;
+      if (discovered.size >= MAX_DISCOVERED_URLS) { discoveryTruncated = true; return; }
+      discovered.add(url); queue.push(url);
+    };
+    // Navigation must not be displaced by arbitrary sitemap ordering.
+    for (const link of pageLinks(first.html, root.href, siteOrigin)) enqueue(link);
     const attempted = new Set<string>();
     const scannedUrls: string[] = [];
     const failedUrls: string[] = [];
@@ -93,12 +109,17 @@ export class WebsiteCrawler {
     const sitemapUrls = new Set([new URL("/sitemap.xml", root).href, ...declaredSitemaps(first.html, root.href, siteOrigin)]);
     const initialPages = new Map([[root.href, first.html]]);
 
+    const checkedSitemaps: string[] = [];
     for (const sitemapUrl of sitemapUrls) {
+      if (checkedSitemaps.length >= MAX_SITEMAPS) { discoveryTruncated = true; break; }
+      checkedSitemaps.push(sitemapUrl);
       try {
         const resource = await this.fetcher.fetchResource(sitemapUrl, ["application/xml", "text/xml", "application/rss+xml"]);
         for (const location of sitemapLocations(resource.body, resource.finalUrl, siteOrigin)) {
-          if (/\.xml$/i.test(new URL(location).pathname)) sitemapUrls.add(location);
-          else if (!discovered.has(location)) { discovered.add(location); queue.push(location); }
+          if (/\.xml$/i.test(new URL(location).pathname)) {
+            if (sitemapUrls.size < MAX_SITEMAPS) sitemapUrls.add(location);
+            else if (!sitemapUrls.has(location)) discoveryTruncated = true;
+          } else enqueue(location);
         }
       } catch { /* Sitemap discovery is optional; page failures are reported separately. */ }
     }
@@ -110,10 +131,12 @@ export class WebsiteCrawler {
         const stored = initialPages.get(requestedUrl);
         const page = stored === undefined ? await this.fetcher.fetchPage(requestedUrl) : { html: stored, finalUrl: requestedUrl };
         if (new URL(page.finalUrl).origin !== siteOrigin) throw new Error("cross-origin redirect");
+        if (finalUrls.has(page.finalUrl)) { duplicatePages++; continue; }
+        finalUrls.add(page.finalUrl);
         scannedUrls.push(page.finalUrl);
         observations.push(...this.parser.parse(page.html, page.finalUrl));
         for (const link of pageLinks(page.html, page.finalUrl, siteOrigin)) {
-          if (!discovered.has(link)) { discovered.add(link); queue.push(link); }
+          enqueue(link);
         }
       } catch { failedUrls.push(requestedUrl); }
     }
@@ -123,7 +146,7 @@ export class WebsiteCrawler {
       pagesScanned: scannedUrls.length, pagesFailed: failedUrls.length,
       pagesSkipped: Math.max(0, discovered.size - attempted.size),
       limitReached: queue.length > 0 && attempted.size >= this.pageLimit,
-      scannedUrls, failedUrls, sitemapUrls: [...sitemapUrls],
+      scannedUrls, failedUrls, sitemapUrls: checkedSitemaps, discoveryTruncated, duplicatePages,
     } };
   }
 }
