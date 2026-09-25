@@ -2,25 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { WebsiteCrawler, configuredPageLimit } from "../src/core/discovery/WebsiteCrawler";
-import { WebsiteFetcher, type WebsiteResource } from "../src/core/discovery/WebsiteFetcher";
+import { WebsiteFetcher, type FetchControl, type WebsiteResource } from "../src/core/discovery/WebsiteFetcher";
 
 class FixtureFetcher extends WebsiteFetcher {
   readonly requested: string[] = [];
 
   constructor(private readonly pages: Record<string, { body: string; contentType?: string }>) { super(); }
 
-  override async fetchPage(input: string) {
-    const resource = await this.read(input);
+  override async fetchPage(input: string, control: FetchControl = {}) {
+    const resource = await this.read(input, control);
     return { html: resource.body, finalUrl: resource.finalUrl };
   }
 
-  override async fetchResource(input: string, _allowed: readonly string[]): Promise<WebsiteResource> {
-    return this.read(input);
+  override async fetchResource(input: string, _allowed: readonly string[], control: FetchControl = {}): Promise<WebsiteResource> {
+    return this.read(input, control);
   }
 
-  private async read(input: string): Promise<WebsiteResource> {
+  private async read(input: string, control: FetchControl): Promise<WebsiteResource> {
     const url = new URL(input).href;
+    await control.beforeRequest?.(new URL(url));
     this.requested.push(url);
+    if (url.endsWith("/robots.txt") && !this.pages[url]) return {body: "", finalUrl: url, contentType: "text/plain"};
     const fixture = this.pages[url];
     if (!fixture) throw new Error("not found");
     return { body: fixture.body, finalUrl: url, contentType: fixture.contentType ?? "text/html" };
@@ -54,7 +56,7 @@ test("reports explicit coverage when the configured page bound leaves discoverie
   });
   const result = await new WebsiteCrawler(fetcher, undefined, 2).crawl("https://example.com/");
   assert.deepEqual(result.coverage, {
-    discoveryTruncated: false, duplicatePages: 0,
+    discoveryTruncated: false, duplicatePages: 0, robotsExcludedUrls: [],
     pageLimit: 2, pagesDiscovered: 3, pagesAttempted: 2, pagesScanned: 2, pagesFailed: 0,
     pagesSkipped: 1, limitReached: true,
     scannedUrls: ["https://example.com/", "https://example.com/a"], failedUrls: [],
@@ -84,7 +86,7 @@ test("caps chained sitemaps and prioritizes homepage links over sitemap entries"
   assert.equal(result.coverage.sitemapUrls.length, 10);
   assert.equal(result.coverage.discoveryTruncated, true);
   assert.deepEqual(result.coverage.scannedUrls, ["https://example.com/", "https://example.com/about"]);
-  assert.equal(fetcher.requested.length, 12);
+  assert.equal(fetcher.requested.length, 13);
 });
 
 test("preserves content query parameters and removes only known tracking parameters", async () => {
@@ -100,8 +102,8 @@ test("preserves content query parameters and removes only known tracking paramet
 
 test("redirect aliases contribute evidence and scanned counts only once", async () => {
   class RedirectFetcher extends FixtureFetcher {
-    override async fetchPage(input: string) {
-      const page = await super.fetchPage(input);
+    override async fetchPage(input: string, control: FetchControl = {}) {
+      const page = await super.fetchPage(input, control);
       return {...page, finalUrl: input.endsWith("/alias") ? "https://example.com/about" : page.finalUrl};
     }
   }
@@ -114,4 +116,34 @@ test("redirect aliases contribute evidence and scanned counts only once", async 
   assert.equal(result.coverage.pagesScanned, 2);
   assert.equal(result.coverage.duplicatePages, 1);
   assert.equal(new Set(result.observations.map(o => o.id)).size, result.observations.length);
+});
+
+test("robots restrictions prevent fetching content and permitted exceptions remain scannable", async () => {
+  const fetcher = new FixtureFetcher({
+    "https://example.com/robots.txt": {body: 'User-agent: *\nDisallow: /private\nAllow: /private/public$', contentType: 'text/plain'},
+    "https://example.com/": {body: '<a href="/private">Private</a><a href="/private/public">Public</a>'},
+    "https://example.com/private/public": {body: '<h1>Public</h1>'},
+  });
+  const result = await new WebsiteCrawler(fetcher, undefined, 3).crawl("https://example.com/");
+  assert.deepEqual(result.coverage.robotsExcludedUrls, ["https://example.com/private"]);
+  assert.ok(!fetcher.requested.includes("https://example.com/private"));
+  assert.equal(result.coverage.pagesScanned, 2);
+});
+
+test("deadline aborts in-flight sitemap work and reports partial coverage", async () => {
+  class SlowFetcher extends FixtureFetcher {
+    override async fetchResource(input: string, allowed: readonly string[], control: FetchControl = {}) {
+      if (input.endsWith("sitemap.xml")) {
+        await new Promise<void>((_resolve, reject) => {
+          if (control.signal?.aborted) { reject(new Error('aborted')); return; }
+          control.signal?.addEventListener('abort', () => reject(new Error('aborted')), {once: true});
+        });
+      }
+      return super.fetchResource(input, allowed, control);
+    }
+  }
+  const fetcher = new SlowFetcher({"https://example.com/": {body: '<h1>Home</h1>'}});
+  const result = await new WebsiteCrawler(fetcher, undefined, 3, 20).crawl("https://example.com/");
+  assert.equal(result.coverage.stoppedReason, 'deadline');
+  assert.equal(result.coverage.discoveryTruncated, true);
 });

@@ -1,7 +1,9 @@
+import { CrawlRobotsPolicy, RobotsDeniedError } from "./CrawlRobotsPolicy";
 import { load } from "cheerio";
 
 import { HtmlParser } from "@/src/core/discovery/HtmlParser";
-import { WebsiteFetcher } from "@/src/core/discovery/WebsiteFetcher";
+import { WebsiteFetchError } from "./PublicWebsitePolicy";
+import { WebsiteFetcher, type FetchControl } from "@/src/core/discovery/WebsiteFetcher";
 import type { Observation } from "@/src/types/observation";
 
 export const DEVELOPMENT_MAX_PAGES = 25;
@@ -30,6 +32,8 @@ export interface CrawlCoverage {
   sitemapUrls: string[];
   discoveryTruncated: boolean;
   duplicatePages: number;
+  robotsExcludedUrls: string[];
+  stoppedReason?: "deadline" | "bytes" | "requests" | "observations";
 }
 
 export interface WebsiteCrawlResult { observations: Observation[]; coverage: CrawlCoverage }
@@ -80,21 +84,51 @@ export class WebsiteCrawler {
     private readonly fetcher = new WebsiteFetcher(),
     private readonly parser = new HtmlParser(),
     private readonly pageLimit = configuredPageLimit(),
+    private readonly scanTimeoutMs = 60_000,
   ) {
+    if (!Number.isInteger(scanTimeoutMs) || scanTimeoutMs < 1 || scanTimeoutMs > 60_000) throw new Error("Invalid scan deadline.");
     if (!Number.isInteger(pageLimit) || pageLimit < 1 || pageLimit > DEVELOPMENT_MAX_PAGES) {
       throw new Error(`Crawl page limit must be between 1 and ${DEVELOPMENT_MAX_PAGES}.`);
     }
   }
 
   async crawl(input: string): Promise<WebsiteCrawlResult> {
-    const first = await this.fetcher.fetchPage(input);
+    const controller = new AbortController();
+    let stoppedReason: CrawlCoverage["stoppedReason"];
+    const stop = (reason: NonNullable<CrawlCoverage["stoppedReason"]>) => {
+      stoppedReason ??= reason;
+      controller.abort();
+      throw new WebsiteFetchError("The scan reached its resource limit.");
+    };
+    const expiresAt = Date.now() + this.scanTimeoutMs;
+    const timer = setTimeout(() => { stoppedReason = "deadline"; controller.abort(); }, this.scanTimeoutMs);
+    let bytes = 0;
+    let requests = 0;
+    let scope: string | undefined;
+    const control: FetchControl = {
+      signal: controller.signal,
+      beforeRequest: (url) => {
+        if (Date.now() >= expiresAt) stop("deadline");
+        if (scope && url.origin !== scope) throw new WebsiteFetchError("Redirect leaves the scanned website.");
+        if (++requests > 50) stop("requests");
+      },
+      onBytes: (count) => { bytes += count; if (bytes > 20 * 1024 * 1024) stop("bytes"); },
+    };
+    const robots = new CrawlRobotsPolicy(this.fetcher, control);
+    const contentControl: FetchControl = {...control, beforeRequest: async (url) => {
+      await control.beforeRequest?.(url);
+      await robots.check(url);
+    }};
+    try {
+    const first = await this.fetcher.fetchPage(input, contentControl);
     const root = new URL(first.finalUrl);
     const siteOrigin = root.origin;
-    const queue = [root.href];
+    scope = siteOrigin;
+    const queue: string[] = [];
     let discoveryTruncated = false;
     let duplicatePages = 0;
-    const finalUrls = new Set<string>();
-    const discovered = new Set(queue);
+    const finalUrls = new Set<string>([root.href]);
+    const discovered = new Set([root.href]);
     const enqueue = (url: string) => {
       if (discovered.has(url)) return;
       if (discovered.size >= MAX_DISCOVERED_URLS) { discoveryTruncated = true; return; }
@@ -102,19 +136,22 @@ export class WebsiteCrawler {
     };
     // Navigation must not be displaced by arbitrary sitemap ordering.
     for (const link of pageLinks(first.html, root.href, siteOrigin)) enqueue(link);
-    const attempted = new Set<string>();
-    const scannedUrls: string[] = [];
+    const attempted = new Set<string>([root.href]);
+    const scannedUrls: string[] = [root.href];
     const failedUrls: string[] = [];
-    const observations: Observation[] = [];
-    const sitemapUrls = new Set([new URL("/sitemap.xml", root).href, ...declaredSitemaps(first.html, root.href, siteOrigin)]);
-    const initialPages = new Map([[root.href, first.html]]);
+    const robotsExcludedUrls: string[] = [];
+    const rootObservations = this.parser.parse(first.html, root.href);
+    const observations: Observation[] = rootObservations.slice(0, 10_000);
+    if (rootObservations.length > observations.length) { stoppedReason = "observations"; controller.abort(); }
+    const sitemapUrls = new Set([new URL("/sitemap.xml", root).href, ...declaredSitemaps(first.html, root.href, siteOrigin), ...[...robots.sitemapUrls].map(url => normalizedInternalUrl(url, root, siteOrigin)).filter((url): url is string => !!url)]);
 
     const checkedSitemaps: string[] = [];
     for (const sitemapUrl of sitemapUrls) {
+      if (controller.signal.aborted || Date.now() >= expiresAt) { stoppedReason ??= "deadline"; break; }
       if (checkedSitemaps.length >= MAX_SITEMAPS) { discoveryTruncated = true; break; }
       checkedSitemaps.push(sitemapUrl);
       try {
-        const resource = await this.fetcher.fetchResource(sitemapUrl, ["application/xml", "text/xml", "application/rss+xml"]);
+        const resource = await this.fetcher.fetchResource(sitemapUrl, ["application/xml", "text/xml", "application/rss+xml"], contentControl);
         for (const location of sitemapLocations(resource.body, resource.finalUrl, siteOrigin)) {
           if (/\.xml$/i.test(new URL(location).pathname)) {
             if (sitemapUrls.size < MAX_SITEMAPS) sitemapUrls.add(location);
@@ -125,20 +162,26 @@ export class WebsiteCrawler {
     }
 
     while (queue.length && attempted.size < this.pageLimit) {
+      if (controller.signal.aborted || Date.now() >= expiresAt) { stoppedReason ??= "deadline"; break; }
       const requestedUrl = queue.shift()!;
       attempted.add(requestedUrl);
       try {
-        const stored = initialPages.get(requestedUrl);
-        const page = stored === undefined ? await this.fetcher.fetchPage(requestedUrl) : { html: stored, finalUrl: requestedUrl };
+        const page = await this.fetcher.fetchPage(requestedUrl, contentControl);
         if (new URL(page.finalUrl).origin !== siteOrigin) throw new Error("cross-origin redirect");
         if (finalUrls.has(page.finalUrl)) { duplicatePages++; continue; }
         finalUrls.add(page.finalUrl);
         scannedUrls.push(page.finalUrl);
-        observations.push(...this.parser.parse(page.html, page.finalUrl));
+        for (const observation of this.parser.parse(page.html, page.finalUrl)) {
+          if (observations.length >= 10_000) stop("observations");
+          observations.push(observation);
+        }
         for (const link of pageLinks(page.html, page.finalUrl, siteOrigin)) {
           enqueue(link);
         }
-      } catch { failedUrls.push(requestedUrl); }
+      } catch (error) {
+        if (error instanceof RobotsDeniedError) robotsExcludedUrls.push(requestedUrl);
+        else if (!scannedUrls.includes(requestedUrl)) failedUrls.push(requestedUrl);
+      }
     }
 
     return { observations, coverage: {
@@ -146,7 +189,9 @@ export class WebsiteCrawler {
       pagesScanned: scannedUrls.length, pagesFailed: failedUrls.length,
       pagesSkipped: Math.max(0, discovered.size - attempted.size),
       limitReached: queue.length > 0 && attempted.size >= this.pageLimit,
-      scannedUrls, failedUrls, sitemapUrls: checkedSitemaps, discoveryTruncated, duplicatePages,
+      scannedUrls, failedUrls, sitemapUrls: checkedSitemaps, discoveryTruncated: discoveryTruncated || !!stoppedReason, duplicatePages, robotsExcludedUrls,
+      ...(stoppedReason ? {stoppedReason} : {}),
     } };
+    } finally { clearTimeout(timer); }
   }
 }

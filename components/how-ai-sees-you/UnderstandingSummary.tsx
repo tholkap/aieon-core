@@ -41,7 +41,9 @@ export default function UnderstandingSummary({
             {report.coverage.pagesFailed ? `; ${report.coverage.pagesFailed} attempted pages could not be read` : ""}.
             {report.coverage.limitReached
               ? ` The configurable development limit of ${report.coverage.pageLimit} pages was reached, leaving ${report.coverage.pagesSkipped} discovered pages unscanned.`
-              : " All discovered pages were attempted."}
+              : report.coverage.stoppedReason ? " Some discovered pages remain unscanned." : " All discovered pages were attempted."}
+            {report.coverage.stoppedReason ? ` Scan stopped at its ${report.coverage.stoppedReason} limit; results cover only the evidence collected so far.` : ""}
+            {report.coverage.robotsExcludedUrls.length ? ` ${report.coverage.robotsExcludedUrls.length} pages were excluded because crawl permission was denied or could not be verified.` : ""}
             {report.coverage.discoveryTruncated ? " Discovery was limited; these counts do not represent the entire website." : ""}
             {report.coverage.duplicatePages ? ` ${report.coverage.duplicatePages} redirected duplicate pages were excluded from the evidence.` : ""}
             {report.coverage.sitemapUrls.length ? ` Checked ${report.coverage.sitemapUrls.length} sitemap location${report.coverage.sitemapUrls.length === 1 ? "" : "s"}.` : ""}
