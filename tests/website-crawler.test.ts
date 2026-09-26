@@ -56,11 +56,11 @@ test("reports explicit coverage when the configured page bound leaves discoverie
   });
   const result = await new WebsiteCrawler(fetcher, undefined, 2).crawl("https://example.com/");
   assert.deepEqual(result.coverage, {
-    discoveryTruncated: false, duplicatePages: 0, robotsExcludedUrls: [],
+    discoveryTruncated: true, duplicatePages: 0, robotsExcludedUrls: [],
     pageLimit: 2, pagesDiscovered: 3, pagesAttempted: 2, pagesScanned: 2, pagesFailed: 0,
     pagesSkipped: 1, limitReached: true,
     scannedUrls: ["https://example.com/", "https://example.com/a"], failedUrls: [],
-    sitemapUrls: ["https://example.com/sitemap.xml"],
+    sitemapUrls: [],
   });
 });
 
@@ -71,7 +71,7 @@ test("validates the development page-limit configuration", () => {
 });
 
 
-test("caps chained sitemaps and prioritizes homepage links over sitemap entries", async () => {
+test("does not spend the page budget waiting for sitemaps when linked content is available", async () => {
   const pages: Record<string, {body: string; contentType?: string}> = {
     "https://example.com/": {body: '<a href="/about">About</a>'},
     "https://example.com/about": {body: '<h1>About</h1>'},
@@ -83,10 +83,10 @@ test("caps chained sitemaps and prioritizes homepage links over sitemap entries"
   }
   const fetcher = new FixtureFetcher(pages);
   const result = await new WebsiteCrawler(fetcher, undefined, 2).crawl("https://example.com/");
-  assert.equal(result.coverage.sitemapUrls.length, 10);
+  assert.equal(result.coverage.sitemapUrls.length, 0);
   assert.equal(result.coverage.discoveryTruncated, true);
   assert.deepEqual(result.coverage.scannedUrls, ["https://example.com/", "https://example.com/about"]);
-  assert.equal(fetcher.requested.length, 13);
+  assert.equal(fetcher.requested.length, 3);
 });
 
 test("preserves content query parameters and removes only known tracking parameters", async () => {
@@ -145,5 +145,31 @@ test("deadline aborts in-flight sitemap work and reports partial coverage", asyn
   const fetcher = new SlowFetcher({"https://example.com/": {body: '<h1>Home</h1>'}});
   const result = await new WebsiteCrawler(fetcher, undefined, 3, 20).crawl("https://example.com/");
   assert.equal(result.coverage.stoppedReason, 'deadline');
+  assert.equal(result.coverage.discoveryTruncated, true);
+});
+
+
+test("a long collection menu does not displace products and policies", async () => {
+  const pages: Record<string, {body: string}> = {
+    "https://example.com/": {body: Array.from({length: 40}, (_, i) => `<a href="/collections/c${i}">Collection</a>`).join("") + '<a href="/products/bouquet">Bouquet</a><a href="/policies/shipping-policy">Delivery</a><a href="/contact">Contact</a>'},
+    "https://example.com/products/bouquet": {body: '<h1>Bouquet</h1>'},
+    "https://example.com/policies/shipping-policy": {body: '<h1>Delivery</h1>'},
+    "https://example.com/contact": {body: '<h1>Contact</h1>'},
+  };
+  for (let i = 0; i < 40; i++) pages[`https://example.com/collections/c${i}`] = {body: '<h1>Collection</h1>'};
+  const result = await new WebsiteCrawler(new FixtureFetcher(pages), undefined, 6).crawl("https://example.com/");
+  for (const path of ['/products/bouquet', '/policies/shipping-policy', '/contact']) {
+    assert.ok(result.coverage.scannedUrls.includes('https://example.com' + path));
+  }
+  assert.equal(result.coverage.pagesScanned, 6);
+});
+
+test("sitemap chains remain bounded after linked pages are exhausted", async () => {
+  const pages: Record<string, {body: string}> = {"https://example.com/": {body: '<h1>Home</h1>'}};
+  for (let i = 0; i < 20; i++) pages[`https://example.com/${i === 0 ? 'sitemap' : i}.xml`] = {
+    body: `<sitemapindex><sitemap><loc>https://example.com/${i+1}.xml</loc></sitemap></sitemapindex>`,
+  };
+  const result = await new WebsiteCrawler(new FixtureFetcher(pages)).crawl('https://example.com/');
+  assert.equal(result.coverage.sitemapUrls.length, 10);
   assert.equal(result.coverage.discoveryTruncated, true);
 });

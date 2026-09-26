@@ -1,5 +1,6 @@
 import { CrawlRobotsPolicy, RobotsDeniedError } from "./CrawlRobotsPolicy";
 import { load } from "cheerio";
+import { linkHints, selectNextPage, type PageKind } from "./PageSelection";
 
 import { HtmlParser } from "@/src/core/discovery/HtmlParser";
 import { WebsiteFetchError } from "./PublicWebsitePolicy";
@@ -125,6 +126,8 @@ export class WebsiteCrawler {
     const siteOrigin = root.origin;
     scope = siteOrigin;
     const queue: string[] = [];
+    const hints = linkHints(first.html, root.href);
+    const selectedCounts: Record<PageKind, number> = {policy: 0, product: 0, category: 0, content: 0, utility: 0};
     let discoveryTruncated = false;
     let duplicatePages = 0;
     const finalUrls = new Set<string>([root.href]);
@@ -146,24 +149,27 @@ export class WebsiteCrawler {
     const sitemapUrls = new Set([new URL("/sitemap.xml", root).href, ...declaredSitemaps(first.html, root.href, siteOrigin), ...[...robots.sitemapUrls].map(url => normalizedInternalUrl(url, root, siteOrigin)).filter((url): url is string => !!url)]);
 
     const checkedSitemaps: string[] = [];
-    for (const sitemapUrl of sitemapUrls) {
+    // Read discovered HTML first. Sitemaps supplement exhausted link discovery,
+    // rather than consuming the deadline before any useful content is read.
+    while (attempted.size < this.pageLimit) {
       if (controller.signal.aborted || Date.now() >= expiresAt) { stoppedReason ??= "deadline"; break; }
-      if (checkedSitemaps.length >= MAX_SITEMAPS) { discoveryTruncated = true; break; }
-      checkedSitemaps.push(sitemapUrl);
-      try {
-        const resource = await this.fetcher.fetchResource(sitemapUrl, ["application/xml", "text/xml", "application/rss+xml"], contentControl);
-        for (const location of sitemapLocations(resource.body, resource.finalUrl, siteOrigin)) {
-          if (/\.xml$/i.test(new URL(location).pathname)) {
-            if (sitemapUrls.size < MAX_SITEMAPS) sitemapUrls.add(location);
-            else if (!sitemapUrls.has(location)) discoveryTruncated = true;
-          } else enqueue(location);
-        }
-      } catch { /* Sitemap discovery is optional; page failures are reported separately. */ }
-    }
-
-    while (queue.length && attempted.size < this.pageLimit) {
-      if (controller.signal.aborted || Date.now() >= expiresAt) { stoppedReason ??= "deadline"; break; }
-      const requestedUrl = queue.shift()!;
+      if (!queue.length) {
+        const sitemapUrl = [...sitemapUrls].find(url => !checkedSitemaps.includes(url));
+        if (!sitemapUrl) break;
+        if (checkedSitemaps.length >= MAX_SITEMAPS) { discoveryTruncated = true; break; }
+        checkedSitemaps.push(sitemapUrl);
+        try {
+          const resource = await this.fetcher.fetchResource(sitemapUrl, ["application/xml", "text/xml", "application/rss+xml"], contentControl);
+          for (const location of sitemapLocations(resource.body, resource.finalUrl, siteOrigin)) {
+            if (/\.xml$/i.test(new URL(location).pathname)) {
+              if (sitemapUrls.size < MAX_SITEMAPS) sitemapUrls.add(location);
+              else if (!sitemapUrls.has(location)) discoveryTruncated = true;
+            } else enqueue(location);
+          }
+        } catch { /* Optional discovery failure does not invalidate collected pages. */ }
+        continue;
+      }
+      const requestedUrl = selectNextPage(queue, hints, selectedCounts);
       attempted.add(requestedUrl);
       try {
         const page = await this.fetcher.fetchPage(requestedUrl, contentControl);
@@ -171,9 +177,16 @@ export class WebsiteCrawler {
         if (finalUrls.has(page.finalUrl)) { duplicatePages++; continue; }
         finalUrls.add(page.finalUrl);
         scannedUrls.push(page.finalUrl);
-        for (const observation of this.parser.parse(page.html, page.finalUrl)) {
-          if (observations.length >= 10_000) stop("observations");
-          observations.push(observation);
+        const pageObservations = this.parser.parse(page.html, page.finalUrl);
+        const remaining = 10_000 - observations.length;
+        observations.push(...pageObservations.slice(0, remaining));
+        if (pageObservations.length > remaining) {
+          stoppedReason = "observations";
+          controller.abort();
+          break;
+        }
+        for (const [link, kind] of linkHints(page.html, page.finalUrl)) {
+          if (!hints.has(link)) hints.set(link, kind);
         }
         for (const link of pageLinks(page.html, page.finalUrl, siteOrigin)) {
           enqueue(link);
@@ -189,7 +202,7 @@ export class WebsiteCrawler {
       pagesScanned: scannedUrls.length, pagesFailed: failedUrls.length,
       pagesSkipped: Math.max(0, discovered.size - attempted.size),
       limitReached: queue.length > 0 && attempted.size >= this.pageLimit,
-      scannedUrls, failedUrls, sitemapUrls: checkedSitemaps, discoveryTruncated: discoveryTruncated || !!stoppedReason, duplicatePages, robotsExcludedUrls,
+      scannedUrls, failedUrls, sitemapUrls: checkedSitemaps, discoveryTruncated: discoveryTruncated || !!stoppedReason || checkedSitemaps.length < sitemapUrls.size, duplicatePages, robotsExcludedUrls,
       ...(stoppedReason ? {stoppedReason} : {}),
     } };
     } finally { clearTimeout(timer); }
