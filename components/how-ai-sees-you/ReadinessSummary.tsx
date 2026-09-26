@@ -6,8 +6,8 @@ export default function ReadinessSummary({ report }: { report: AiUnderstandingRe
       <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#D4AF37]">Scope of this report</p>
       <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">What was checked</h2>
       <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/65">
-        Identity, offering descriptions, and customer action wording: {report.stats.assessed} of six questions.
-        Audience, trust, and differentiation are not assessed yet.
+        Identity, offering descriptions, audience, and customer action wording: {report.stats.assessed} of six questions.
+        Trust and differentiation are not assessed by the deterministic engine yet.
       </p>
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/55">
         This scan reads the requested page&apos;s HTML, without running the website&apos;s JavaScript

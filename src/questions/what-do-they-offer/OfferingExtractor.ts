@@ -18,7 +18,7 @@ const NEGATED_DESCRIPTION = /\b(?:do not|does not|don't|doesn't|never|not)\s+(?:
 function isOfferingDescription(value: string): boolean {
   const words = value.trim().split(/\s+/);
   return words.length >= 4 && value.length <= 700 &&
-    !/[<>]/.test(value) && !NEGATED_DESCRIPTION.test(value) &&
+    !/[<>?“”"]/.test(value) && !/\b(?:might|would|could|hope to|plan to)\b/i.test(value) && !NEGATED_DESCRIPTION.test(value) &&
     OFFERING_DESCRIPTION.test(value);
 }
 

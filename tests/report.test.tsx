@@ -14,13 +14,13 @@ function reportFrom(html: string) {
 test("unimplemented questions cannot become site deficiencies, review items, or a readiness score", () => {
   const report = reportFrom('<title>Northstar</title><h1>Northstar</h1>');
   const unassessed = report.questions.filter((q) => q.assessment === "not-assessed");
-  assert.deepEqual(unassessed.map((q) => q.id), ["audience", "trust", "choose"]);
-  assert.equal(report.stats.notAssessed, 3);
-  assert.equal(report.stats.assessed, 3);
-  assert.equal(report.stats.clear + report.stats.partial + report.stats.missing, 3);
+  assert.deepEqual(unassessed.map((q) => q.id), ["trust", "choose"]);
+  assert.equal(report.stats.notAssessed, 2);
+  assert.equal(report.stats.assessed, 4);
+  assert.equal(report.stats.clear + report.stats.partial + report.stats.missing, 4);
   assert.equal("readinessScore" in report, false);
-  assert.equal(report.blindSpots.some((b) => ["audience", "trust", "choose"].includes(b.id)), false);
-  assert.equal(report.recommendations.some((r) => /trust|audience|choose/i.test(r.relatedQuestion)), false);
+  assert.equal(report.blindSpots.some((b) => ["trust", "choose"].includes(b.id)), false);
+  assert.equal(report.recommendations.some((r) => /trust|choose/i.test(r.relatedQuestion)), false);
 });
 
 test("ordinary navigation is not counted as a customer action", () => {

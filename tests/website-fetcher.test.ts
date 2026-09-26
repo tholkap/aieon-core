@@ -130,3 +130,28 @@ test("process capacity rejects excess work and releases slots idempotently", () 
   assert.throws(()=>acquireScanCapacity(),/capacity/);
   b();c();
 });
+
+test("scan cancellation terminates a stalled response body", async () => {
+  fakeNetwork([{chunks:["x"],stall:true}]);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20);
+  try {
+    await assert.rejects(new WebsiteFetcher({},publicDns).fetchPage("https://example.com/", {signal:controller.signal}), /too long/);
+  } finally { clearTimeout(timer); }
+});
+
+test("scan policy is checked before requesting a redirect target", async () => {
+  const calls = fakeNetwork([{status:302,headers:{location:"/private"}}]);
+  await assert.rejects(new WebsiteFetcher({},publicDns).fetchPage("https://example.com/", {
+    beforeRequest: (url) => { if (url.pathname === '/private') throw new Error('blocked'); },
+  }));
+  assert.equal(calls.length, 1);
+});
+
+test("aggregate byte budget stops streaming through the collector", async () => {
+  fakeNetwork([{chunks:['1234','5678']}]);
+  let total = 0;
+  await assert.rejects(new WebsiteFetcher({},publicDns).fetchPage('https://example.com/', {
+    onBytes: (count) => { total += count; if (total > 6) throw new Error('budget'); },
+  }));
+});
