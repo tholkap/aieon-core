@@ -5,9 +5,12 @@ export type PageKind = "policy" | "product" | "category" | "content" | "utility"
 /** Scheduling hints only; these are never evidence of what a business offers. */
 export function pageKind(url: string, label = "", productContext = false): PageKind {
   const parsed = new URL(url);
-  const path = decodeURI(parsed.pathname).toLowerCase();
+  const path = parsed.pathname.toLowerCase();
   if (/(?:^|\/)(?:cart|checkout|account|login|search|searchbar|wishlist|blocked)(?:\/|$)/.test(path)) return "utility";
-  if (/shipping|delivery|warranty|refund|returns?|contact|about|faq/.test(path + " " + label.toLowerCase())) return "policy";
+  const leaf = path.split("/").filter(Boolean).at(-1) ?? "";
+  // Match policy routes/labels, not catalog phrases such as "shipping boxes".
+  if (/^(?:(?:shipping|delivery|warranty|refund|returns?)(?:-(?:policy|terms|conditions|and|exchange|delivery|shipping))*|contact(?:-us)?|about(?:-us)?|faq)$/.test(leaf) ||
+      /^(?:shipping(?: & delivery)?|delivery|warranty|refund(?: & exchange)?|returns?|contact us|about us|faq)$/i.test(label.trim())) return "policy";
   if (productContext || /\/(?:products?|p)\//.test(path)) return "product";
   if (/\/(?:collections?|categor(?:y|ies))\b/.test(path)) return "category";
   return "content";

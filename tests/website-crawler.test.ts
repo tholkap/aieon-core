@@ -173,3 +173,12 @@ test("sitemap chains remain bounded after linked pages are exhausted", async () 
   assert.equal(result.coverage.sitemapUrls.length, 10);
   assert.equal(result.coverage.discoveryTruncated, true);
 });
+
+
+test("page hints do not confuse shipping products with delivery policies", async () => {
+  const {pageKind} = await import('../src/core/discovery/PageSelection');
+  assert.equal(pageKind('https://example.com/browse/shipping-boxes/123', 'Shipping Boxes'), 'content');
+  assert.equal(pageKind('https://example.com/en/warranty-terms-conditions'), 'policy');
+  assert.equal(pageKind('https://example.com/policies/shipping-policy'), 'policy');
+  assert.doesNotThrow(() => pageKind('https://example.com/%invalid'));
+});
