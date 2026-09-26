@@ -4,7 +4,7 @@ import { mapDiscoveryToAiUnderstanding } from '../components/how-ai-sees-you/map
 
 // Read-only public benchmark. No model calls or paid services; robots and budgets apply.
 async function main() {
-  for (const url of ['https://www.apple.com/', 'https://www.walmart.com/', 'https://thepeninsulaqatar.com/']) {
+  for (const url of ['https://electronyat.qa/', 'https://vivafloraqatar.com/', 'https://www.apple.com/', 'https://www.walmart.com/', 'https://thepeninsulaqatar.com/']) {
     const start = Date.now();
     try {
       const {observations, coverage} = await new WebsiteCrawler().crawl(url);
