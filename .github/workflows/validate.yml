@@ -47,3 +47,7 @@ jobs:
         run: npm run smoke -- --unconfigured
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+      - name: Live multi-page pilot benchmark
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/implement-deeper-website-audit-tool'
+        timeout-minutes: 5
+        run: node --import tsx scripts/crawl-benchmark.ts

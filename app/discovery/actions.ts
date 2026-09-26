@@ -9,9 +9,10 @@ import { parsePublicWebsiteUrl, WebsiteFetchError } from "@/src/core/discovery/P
 import { DiscoveryRunner } from "@/src/core/discovery/DiscoveryRunner";
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
+import type { CrawlCoverage } from "@/src/core/discovery/WebsiteCrawler";
 
 export type DiscoveryResult =
-  | { observations: Observation[]; resolvedIdentity: ResolvedIdentity; interpretation?: InterpretationResult }
+  | { observations: Observation[]; resolvedIdentity: ResolvedIdentity; coverage: CrawlCoverage; interpretation?: InterpretationResult }
   | { error: string };
 
 /**
@@ -29,9 +30,9 @@ export async function runDiscovery(url: unknown, includeInterpretation: unknown 
     const parsed = parsePublicWebsiteUrl(url);
     release = acquireScanCapacity();
     const runner = new DiscoveryRunner();
-    const { observations, resolvedIdentity } = await runner.run(parsed.href);
+    const { observations, resolvedIdentity, coverage } = await runner.run(parsed.href);
     const interpretation = includeInterpretation === true ? await runInterpretation(observations) : undefined;
-    return { observations, resolvedIdentity, interpretation };
+    return { observations, resolvedIdentity, coverage, interpretation };
   } catch (error) {
     return { error: error instanceof WebsiteFetchError
       ? error.message

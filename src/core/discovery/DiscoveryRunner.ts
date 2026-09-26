@@ -1,5 +1,4 @@
-import { HtmlParser } from "@/src/core/discovery/HtmlParser";
-import { WebsiteFetcher } from "@/src/core/discovery/WebsiteFetcher";
+import { WebsiteCrawler, type CrawlCoverage } from "@/src/core/discovery/WebsiteCrawler";
 import { IdentityInterpreter } from "@/src/core/interpreter/IdentityInterpreter";
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
@@ -8,6 +7,7 @@ import type { ResolvedIdentity } from "@/src/types/resolved-identity";
 export interface DiscoveryRunResult {
   observations: Observation[];
   resolvedIdentity: ResolvedIdentity;
+  coverage: CrawlCoverage;
 }
 
 /** Structured log payload emitted at each stage of a discovery run. */
@@ -26,7 +26,7 @@ interface DiscoveryLogEntry {
 }
 
 /**
- * Orchestrates the discovery pipeline for a single website URL.
+ * Orchestrates the bounded discovery pipeline for a website.
  *
  * DiscoveryRunner coordinates download, parsing, and identity interpretation.
  * It does not build evidence, calculate Ions, or invoke any AI models.
@@ -34,27 +34,24 @@ interface DiscoveryLogEntry {
  * Pipeline:
  *
  * ```
- * URL → WebsiteFetcher.fetchHtml → HtmlParser.parse → IdentityInterpreter.interpret
+ * URL → WebsiteCrawler.crawl → HtmlParser.parse (per page) → IdentityInterpreter.interpret
  * ```
  */
 export class DiscoveryRunner {
-  private readonly fetcher: WebsiteFetcher;
-  private readonly parser: HtmlParser;
+  private readonly crawler: WebsiteCrawler;
   private readonly identityInterpreter: IdentityInterpreter;
 
   /**
    * Creates a runner with the given pipeline collaborators.
    *
-   * Defaults to fresh {@link WebsiteFetcher}, {@link HtmlParser}, and
-   * {@link IdentityInterpreter} instances when none are supplied.
+   * Defaults to fresh {@link WebsiteCrawler} and {@link IdentityInterpreter}
+   * instances when none are supplied.
    */
   constructor(
-    fetcher?: WebsiteFetcher,
-    parser?: HtmlParser,
+    crawler?: WebsiteCrawler,
     identityInterpreter?: IdentityInterpreter,
   ) {
-    this.fetcher = fetcher ?? new WebsiteFetcher();
-    this.parser = parser ?? new HtmlParser();
+    this.crawler = crawler ?? new WebsiteCrawler();
     this.identityInterpreter = identityInterpreter ?? new IdentityInterpreter();
   }
 
@@ -70,13 +67,14 @@ export class DiscoveryRunner {
   async run(url: string): Promise<DiscoveryRunResult> {
     this.log("fetch_started", url);
 
-    const { html, finalUrl } = await this.fetcher.fetchPage(url);
+    const { observations, coverage } = await this.crawler.crawl(url);
 
-    this.log("fetch_completed", url, { htmlLength: html.length });
-
-    this.log("parsing_started", url);
-
-    const observations = this.parser.parse(html, finalUrl);
+    this.log("crawl_completed", url, {
+      pagesDiscovered: coverage.pagesDiscovered,
+      pagesScanned: coverage.pagesScanned,
+      pagesFailed: coverage.pagesFailed,
+      pageLimit: coverage.pageLimit,
+    });
 
     this.log("parsing_completed", url, {
       observationCount: observations.length,
@@ -95,7 +93,7 @@ export class DiscoveryRunner {
       confidence: resolvedIdentity.confidence,
     });
 
-    return { observations, resolvedIdentity };
+    return { observations, resolvedIdentity, coverage };
   }
 
   /**

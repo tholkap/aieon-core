@@ -40,7 +40,7 @@ export default function HowAiSeesYouPage() {
       } else {
         setObservations(result.observations);
         setResolvedIdentity(result.resolvedIdentity);
-        setReport({ ...mapDiscoveryToAiUnderstanding(submittedUrl, result.observations, result.resolvedIdentity), interpretation: result.interpretation });
+        setReport({ ...mapDiscoveryToAiUnderstanding(submittedUrl, result.observations, result.resolvedIdentity, result.coverage), interpretation: result.interpretation });
       }
     } catch {
       setError("The scan could not be completed. Please try again.");
@@ -91,7 +91,7 @@ export default function HowAiSeesYouPage() {
               <div className="h-full w-1/3 animate-pulse rounded-full bg-[#D4AF37]" />
             </div>
             <p className="text-sm text-white/50">
-              Reading your public page and building your business understanding
+              Discovering public pages and building your business understanding
               report…
             </p>
           </div>
@@ -132,7 +132,7 @@ export default function HowAiSeesYouPage() {
       <footer className="border-t border-white/10">
         <div className="mx-auto max-w-6xl px-6 py-8 sm:px-10">
           <p className="text-center text-xs text-white/30">
-            Based on the requested page&apos;s HTML only. Findings are limited to
+            Based on the public HTML pages reported in crawl coverage. Findings are limited to
             AiEON&apos;s current checks. No frontier AI comparison has been run.
           </p>
         </div>

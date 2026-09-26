@@ -1,6 +1,7 @@
 import { mapDiscoveryToBusinessProfile, type BusinessQuestion } from "@/components/discovery/mapBusinessProfile";
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
+import type { CrawlCoverage } from "@/src/core/discovery/WebsiteCrawler";
 
 export interface BlindSpot { id: string; title: string; impact: string; question: string }
 export interface Recommendation {
@@ -17,6 +18,7 @@ export interface AiUnderstandingReport {
   blindSpots: BlindSpot[];
   recommendations: Recommendation[];
   stats: { clear: number; partial: number; missing: number; notAssessed: number; assessed: number };
+  coverage?: CrawlCoverage;
 }
 
 const REVIEW_COPY: Record<string, { title: string; impact: string; improvement: string }> = {
@@ -42,7 +44,7 @@ const REVIEW_COPY: Record<string, { title: string; impact: string; improvement: 
   },
 };
 
-export function mapDiscoveryToAiUnderstanding(url: string, observations: Observation[], identity: ResolvedIdentity): AiUnderstandingReport {
+export function mapDiscoveryToAiUnderstanding(url: string, observations: Observation[], identity: ResolvedIdentity, coverage?: CrawlCoverage): AiUnderstandingReport {
   const base = mapDiscoveryToBusinessProfile(url, observations, identity);
   const assessed = base.questions.filter((q) => q.assessment !== "not-assessed");
   const stats = {
@@ -59,7 +61,8 @@ export function mapDiscoveryToAiUnderstanding(url: string, observations: Observa
     ...base,
     brandName,
     summaryHeadline: brandName ? `What AiEON found about ${brandName}` : "What AiEON found on this page",
-    summaryBody: `AiEON checked ${stats.assessed} of six business questions using the page content it could extract. ${stats.clear} returned supported signals; ${stats.partial + stats.missing} need review. The remaining ${stats.notAssessed} questions are not assessed yet. This report does not test ChatGPT, Gemini, Claude, or their recommendations.`,
+    summaryBody: `AiEON checked ${stats.assessed} of six business questions using the ${coverage ? `${coverage.pagesScanned} public pages` : "page"} it could extract. ${stats.clear} returned supported signals; ${stats.partial + stats.missing} need review. The remaining ${stats.notAssessed} questions are not assessed yet. This report does not test ChatGPT, Gemini, Claude, or their recommendations.`,
+    coverage,
     stats,
     blindSpots: reviews.map((q) => ({
       id: q.id, question: q.question,
@@ -69,7 +72,7 @@ export function mapDiscoveryToAiUnderstanding(url: string, observations: Observa
     recommendations: reviews.map((q) => ({
       id: `rec-${q.id}`, relatedQuestion: q.question,
       title: REVIEW_COPY[q.id]?.title ?? q.question,
-      description: REVIEW_COPY[q.id]?.improvement ?? "Review the available evidence before editing your website.",
+      description: `${REVIEW_COPY[q.id]?.improvement ?? "Review the available evidence before editing your website."}${q.sources?.[0] ? ` Evidence to review: “${q.sources[0].quote.slice(0, 180)}” (${q.sources[0].pageUrl}).` : " No supporting excerpt was identified within the scanned coverage."}`,
     })),
   };
 }
