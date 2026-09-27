@@ -5,6 +5,8 @@ const audience = String.raw`(?:(?:small|medium|large|local|independent|global|en
 const direct = new RegExp(String.raw`^we\s+(?:serve|help|support|work with)\s+${audience}`, "i");
 const provision = new RegExp(String.raw`^we\s+(?:provide|offer|build|create|design)\s+[^.!?]{1,120}\s+for\s+${audience}`, "i");
 const headline = new RegExp(String.raw`^(?:software|a platform|services|accounting services|training|courses|accommodation|tools)\s+for\s+${audience}`, "i");
+// Explicit use settings in descriptive metadata are clues, not verified customers.
+const setting = /\b(?:plans?|subscriptions?|services|delivery|software|tools)\s+for\s+(?:homes?|offices?|schools?|businesses|families|teams)\b/i;
 const unsafe = /[<>?"“”]|\b(?:not|no|never|might|may|would|could|wish|hope|plan|except|excluding)\b/i;
 
 export const whoDoTheyHelpQuestionEngine: QuestionEngine = {
@@ -15,7 +17,7 @@ export const whoDoTheyHelpQuestionEngine: QuestionEngine = {
       const text = o.rawValue.trim().replace(/\s+/g, " ");
       if (text.length > 600 || unsafe.test(text)) return [];
       const explicit = direct.test(text) || provision.test(text);
-      const tentative = o.sourceType !== "paragraph" && headline.test(text);
+      const tentative = o.sourceType !== "paragraph" && (headline.test(text) || setting.test(text));
       return explicit || tentative ? [{ observation: o, explicit }] : [];
     });
     const unique = [...new Map(candidates.map((c) => [c.observation.rawValue.trim().toLowerCase(), c])).values()];
@@ -24,8 +26,8 @@ export const whoDoTheyHelpQuestionEngine: QuestionEngine = {
     return {
       questionId: "audience", question: "Who do they help?", sectionTitle: "Who you help",
       answer: unique.length
-        ? `Your page describes its audience: ${unique.slice(0, 3).map((c) => c.observation.rawValue).join(" · ")}`
-        : "No explicit audience statement identified by the current checks on this page.",
+        ? `The scanned content describes audience or use context: ${unique.slice(0, 3).map((c) => c.observation.rawValue).join(" · ")}`
+        : "No explicit audience statement identified by the current checks across the scanned content.",
       // Rule support levels, not calibrated probabilities. Repetition does not increase confidence.
       confidence: explicit ? 1 : unique.length ? 0.5 : 0,
       status,
@@ -33,9 +35,9 @@ export const whoDoTheyHelpQuestionEngine: QuestionEngine = {
       reasoning: [
         "Checked the first main heading, page description, and eligible body paragraphs for explicit English audience statements. Navigation labels and inferred demographics are excluded.",
         "Quotes are website claims, not independently verified customer relationships. Confidence describes rule support, not a probability that the claim is true.",
-        "Coverage is limited to this page and recognized wording. An unmatched statement does not establish that audience information is absent from the website.",
+        "Coverage is limited to the scanned content and recognized wording. An unmatched statement does not establish that audience information is absent from the website.",
       ],
-      blindSpots: status === "found" ? [] : [{ id: "audience-review", title: "Audience wording needs review", description: "Review this page for an explicit statement of who the products or services are intended for; other wording may be outside AiEON's current coverage." }],
+      blindSpots: status === "found" ? [] : [{ id: "audience-review", title: "Audience wording needs review", description: "Review the scanned evidence for an explicit statement of who the products or services are intended for; other wording may be outside AiEON's current coverage." }],
       recommendations: status === "found" ? [] : [{ id: "audience-copy", priority: "medium", title: "Check your audience description", description: "If the intended customers are not stated, add an accurate sentence near the offering description. Rescan to check whether it is identified." }],
     };
   },

@@ -34,7 +34,7 @@ const REVIEW_COPY: Record<string, { title: string; impact: string; improvement: 
   },
   audience: {
     title: "Audience description needs review",
-    impact: "AiEON did not find a clear audience statement using its current English wording checks on this page. This can be a coverage limitation.",
+    impact: "AiEON did not find a clear audience statement using its current English wording checks across the scanned content. This can be a coverage limitation.",
     improvement: "Review who your offering is intended for. If that is not stated, add an accurate audience sentence near the offering description and rescan. Do not rewrite clear existing copy just to match AiEON.",
   },
   action: {
@@ -55,6 +55,22 @@ export function mapDiscoveryToAiUnderstanding(url: string, observations: Observa
     assessed: assessed.length,
   };
   const reviews = assessed.filter((q) => q.status !== "found");
+  const reviewCopy = (q: BusinessQuestion) => {
+    if (q.id === "what" && q.status === "partial" && q.sources?.some(s =>
+      ["meta-description", "paragraph", "h1"].includes(s.sourceType) && s.quote === q.summary)) {
+      return {
+        title: "Offering description found; assessment remains partial",
+        impact: "AiEON extracted an offering description. Its current matching rules did not fully corroborate it; this is not evidence that your offering is unclear or missing.",
+        improvement: "Compare the quoted description with your actual catalog and the pages included in crawl coverage. Keep accurate existing copy. Correct a mismatch only if you confirm one; AiEON has not established a missing description or a contradiction.",
+      };
+    }
+    if (q.id === "audience" && q.status === "partial") return {
+      title: "Audience context found; interpretation needs review",
+      impact: "The checked content names a use setting or intended recipient. This is a contextual clue, not a verified customer segment.",
+      improvement: "Review the quoted use setting or recipient wording against your intended customers. Keep it if accurate; add detail only if it would help a customer choose. AiEON has not established that audience information is absent.",
+    };
+    return REVIEW_COPY[q.id];
+  };
   const who = base.questions.find((q) => q.id === "who");
   const brandName = who?.status === "found" ? who.summary : null;
   return {
@@ -66,13 +82,13 @@ export function mapDiscoveryToAiUnderstanding(url: string, observations: Observa
     stats,
     blindSpots: reviews.map((q) => ({
       id: q.id, question: q.question,
-      title: REVIEW_COPY[q.id]?.title ?? q.question,
-      impact: REVIEW_COPY[q.id]?.impact ?? "Review the available evidence.",
+      title: reviewCopy(q)?.title ?? q.question,
+      impact: reviewCopy(q)?.impact ?? "Review the available evidence.",
     })),
     recommendations: reviews.map((q) => ({
       id: `rec-${q.id}`, relatedQuestion: q.question,
-      title: REVIEW_COPY[q.id]?.title ?? q.question,
-      description: `${REVIEW_COPY[q.id]?.improvement ?? "Review the available evidence before editing your website."}${q.sources?.[0] ? ` Evidence to review: “${q.sources[0].quote.slice(0, 180)}” (${q.sources[0].pageUrl}).` : " No supporting excerpt was identified within the scanned coverage."}`,
+      title: reviewCopy(q)?.title ?? q.question,
+      description: `${reviewCopy(q)?.improvement ?? "Review the available evidence before editing your website."}${q.sources?.[0] ? ` Evidence to review: “${q.sources[0].quote.slice(0, 180)}” (${q.sources[0].pageUrl}).` : " No supporting excerpt was identified within the scanned coverage."}`,
     })),
   };
 }

@@ -42,3 +42,18 @@ test("audience source is displayed in the customer report", async () => {
   assert.equal(question.sources?.[0].quote, 'We serve small businesses.');
   assert.equal(report.stats.assessed, 4);
 });
+
+test("subscription use settings remain qualified and retain the original evidence", () => {
+  const copy = 'Enjoy weekly flower subscriptions. Flexible plans for homes, offices and gifts.';
+  const result = analyze(`<meta name="description" content="${copy}">`);
+  assert.equal(result.status, 'partial');
+  assert.equal(result.evidence[0].rawValue, copy);
+});
+for (const copy of ['We do not offer plans for homes.', 'We might offer plans for offices.', 'Plans for offices? Contact us.']) {
+  test(`uncertain use setting is not audience evidence: ${copy}`, () => {
+    assert.equal(analyze(`<meta name="description" content="${copy}">`).status, 'missing');
+  });
+}
+test("ordinary navigation settings do not establish an audience", () => {
+  assert.equal(analyze('<nav><a>Plans for homes</a></nav>').status, 'missing');
+});
