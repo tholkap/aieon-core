@@ -67,3 +67,21 @@ test("body offering appears in the customer report with its exact source", () =>
   assert.ok(rendered.includes(copy));
   assert.match(rendered, /How we determined this/);
 });
+
+test("an extracted description is not presented as missing offering copy", () => {
+  const report = reportFrom('<meta name="description" content="We offer flower delivery in Doha."><h1>Northstar</h1>');
+  const rec = report.recommendations.find(r => r.id === 'rec-what')!;
+  assert.match(rec.title, /description found/);
+  assert.doesNotMatch(rec.description, /add one|homepage lacks/);
+  assert.match(rec.description, /Keep accurate existing copy/);
+});
+
+test("multi-page scope uses actual coverage instead of claiming a single page", () => {
+  const report = reportFrom('<h1>Northstar</h1>');
+  report.coverage = {pageLimit:25, pagesDiscovered:221, pagesAttempted:18, pagesScanned:18,
+    pagesFailed:0,pagesSkipped:203,limitReached:false,scannedUrls:[],failedUrls:[],sitemapUrls:[],
+    discoveryTruncated:true,duplicatePages:0,robotsExcludedUrls:[],stoppedReason:'deadline'};
+  const html = renderToStaticMarkup(<AiUnderstandingReportView report={report} />);
+  assert.match(html, /HTML from 18 public pages/);
+  assert.doesNotMatch(html, /or visiting other pages/);
+});

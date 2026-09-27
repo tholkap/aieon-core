@@ -10,8 +10,10 @@ export default function ReadinessSummary({ report }: { report: AiUnderstandingRe
         Trust and differentiation are not assessed by the deterministic engine yet.
       </p>
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/55">
-        This scan reads the requested page&apos;s HTML, without running the website&apos;s JavaScript
-        or visiting other pages. The current offering rules cover limited English descriptions.
+        {report.coverage
+          ? `This scan read HTML from ${report.coverage.pagesScanned} public pages listed in crawl coverage.`
+          : "This scan read the requested page's HTML."}{" "}
+        It did not run the website&apos;s JavaScript. The current offering rules cover limited English descriptions.
         A signal not identified here may still exist elsewhere on your site or fall outside these checks.
       </p>
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/55">
