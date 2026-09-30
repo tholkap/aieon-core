@@ -1,3 +1,4 @@
+import { checkDeliveryConsistency, type DeliveryConsistencyResult } from "@/src/consistency/DeliveryConsistency";
 import { mapDiscoveryToBusinessProfile, type BusinessQuestion } from "@/components/discovery/mapBusinessProfile";
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
@@ -19,6 +20,7 @@ export interface AiUnderstandingReport {
   recommendations: Recommendation[];
   stats: { clear: number; partial: number; missing: number; notAssessed: number; assessed: number };
   coverage?: CrawlCoverage;
+  deliveryConsistency?: DeliveryConsistencyResult;
 }
 
 const REVIEW_COPY: Record<string, { title: string; impact: string; improvement: string }> = {
@@ -79,6 +81,7 @@ export function mapDiscoveryToAiUnderstanding(url: string, observations: Observa
     summaryHeadline: brandName ? `What AiEON found about ${brandName}` : "What AiEON found on this page",
     summaryBody: `AiEON checked ${stats.assessed} of six business questions using the ${coverage ? `${coverage.pagesScanned} public pages` : "page"} it could extract. ${stats.clear} returned supported signals; ${stats.partial + stats.missing} need review. The remaining ${stats.notAssessed} questions are not assessed yet. This report does not test ChatGPT, Gemini, Claude, or their recommendations.`,
     coverage,
+    deliveryConsistency: checkDeliveryConsistency(observations),
     stats,
     blindSpots: reviews.map((q) => ({
       id: q.id, question: q.question,
