@@ -7,7 +7,17 @@ export interface WebsiteFetcherOptions {
   maxBytes?: number;
   maxRedirects?: number;
 }
+export class WebsiteHttpError extends WebsiteFetchError {
+  constructor(readonly status: number) { super(`The website returned HTTP ${status}.`); }
+}
+
+export interface FetchControl {
+  signal?: AbortSignal;
+  beforeRequest?: (url: URL) => void | Promise<void>;
+  onBytes?: (bytes: number) => void;
+}
 export interface WebsitePage { html: string; finalUrl: string }
+export interface WebsiteResource { body: string; finalUrl: string; contentType: string }
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 
 /** Node-only transport. No ambient proxy, cookies, authentication, or automatic redirects. */
@@ -28,17 +38,27 @@ export class WebsiteFetcher {
 
   async fetchHtml(input: string): Promise<string> { return (await this.fetchPage(input)).html; }
 
-  async fetchPage(input: string): Promise<WebsitePage> {
+  async fetchPage(input: string, control: FetchControl = {}): Promise<WebsitePage> {
+    const resource = await this.fetchResource(input, ["text/html", "application/xhtml+xml"], control);
+    return { html: resource.body, finalUrl: resource.finalUrl };
+  }
+
+  /** Fetches a bounded textual resource through the same SSRF-safe transport. */
+  async fetchResource(input: string, allowedContentTypes: readonly string[], control: FetchControl = {}): Promise<WebsiteResource> {
     let url = parsePublicWebsiteUrl(input);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const signal = control.signal ? AbortSignal.any([controller.signal, control.signal]) : controller.signal;
     const seen = new Set<string>();
     try {
       for (let redirects = 0; ; redirects++) {
+        signal.throwIfAborted();
+        await control.beforeRequest?.(url);
+        signal.throwIfAborted();
         if (seen.has(url.href)) throw new WebsiteFetchError("The website has a redirect loop.");
         seen.add(url.href);
-        const address = await resolvePublicAddress(url.hostname, controller.signal, this.resolver);
-        const response = await this.request(url, address, controller.signal);
+        const address = await resolvePublicAddress(url.hostname, signal, this.resolver);
+        const response = await this.request(url, address, signal);
         try {
           if (REDIRECTS.has(response.statusCode ?? 0)) {
             if (redirects >= this.maxRedirects) throw new WebsiteFetchError("The website redirects too many times.");
@@ -53,10 +73,10 @@ export class WebsiteFetcher {
             continue;
           }
           if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
-            throw new WebsiteFetchError(`The website returned HTTP ${response.statusCode ?? "error"}.`);
+            throw new WebsiteHttpError(response.statusCode ?? 0);
           }
           const mime = response.headers["content-type"]?.split(";", 1)[0].trim().toLowerCase();
-          if (mime !== "text/html" && mime !== "application/xhtml+xml") throw new WebsiteFetchError("The website did not return an HTML page.");
+          if (!mime || !allowedContentTypes.includes(mime)) throw new WebsiteFetchError("The website returned an unsupported content type.");
           // Request uncompressed data; reject servers that ignore that request, avoiding decompression bombs.
           const encoding = response.headers["content-encoding"]?.toLowerCase();
           if (encoding && encoding !== "identity") throw new WebsiteFetchError("The website returned an unsupported content encoding.");
@@ -64,17 +84,18 @@ export class WebsiteFetcher {
           let size = 0;
           const chunks: Buffer[] = [];
           for await (const chunk of response) {
-            controller.signal.throwIfAborted();
+            signal.throwIfAborted();
             const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            control.onBytes?.(bytes.length);
             size += bytes.length;
             if (size > this.maxBytes) throw new WebsiteFetchError("The page exceeds the scan size limit.");
             chunks.push(bytes);
           }
-          return {html: Buffer.concat(chunks).toString("utf8"), finalUrl: url.href};
+          return {body: Buffer.concat(chunks).toString("utf8"), finalUrl: url.href, contentType: mime};
         } finally { response.destroy(); }
       }
     } catch (error) {
-      if (controller.signal.aborted) throw new WebsiteFetchError("The website took too long to respond. Please try again.");
+      if (signal.aborted) throw new WebsiteFetchError("The website took too long to respond. Please try again.");
       if (error instanceof WebsiteFetchError) throw error;
       throw new WebsiteFetchError("The website could not be reached securely. Please check the URL and try again.");
     } finally { clearTimeout(timer); }

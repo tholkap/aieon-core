@@ -1,3 +1,5 @@
+import ConsistencySection from "./ConsistencySection";
+import InterpretationSection from "./InterpretationSection";
 import BlindSpotsSection from "@/components/how-ai-sees-you/BlindSpotsSection";
 import BusinessQuestionsSection from "@/components/how-ai-sees-you/BusinessQuestionsSection";
 import type { AiUnderstandingReport as Report } from "@/components/how-ai-sees-you/mapAiUnderstanding";
@@ -13,6 +15,8 @@ export default function AiUnderstandingReportView({
   return (
     <div className="space-y-16">
       <UnderstandingSummary report={report} />
+      <InterpretationSection result={report.interpretation} />
+      <ConsistencySection result={report.deliveryConsistency} />
       <BusinessQuestionsSection report={report} />
       <BlindSpotsSection report={report} />
       <RecommendationsSection report={report} />

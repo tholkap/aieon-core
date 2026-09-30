@@ -12,6 +12,7 @@ import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
 
 export default function HowAiSeesYouPage() {
+  const [includeInterpretation, setIncludeInterpretation] = useState(false);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,13 +34,13 @@ export default function HowAiSeesYouPage() {
     setReport(null);
 
     try {
-      const result = await runDiscovery(submittedUrl);
+      const result = await runDiscovery(submittedUrl, includeInterpretation);
       if ("error" in result) {
         setError(result.error);
       } else {
         setObservations(result.observations);
         setResolvedIdentity(result.resolvedIdentity);
-        setReport(mapDiscoveryToAiUnderstanding(submittedUrl, result.observations, result.resolvedIdentity));
+        setReport({ ...mapDiscoveryToAiUnderstanding(submittedUrl, result.observations, result.resolvedIdentity, result.coverage), interpretation: result.interpretation });
       }
     } catch {
       setError("The scan could not be completed. Please try again.");
@@ -76,6 +77,11 @@ export default function HowAiSeesYouPage() {
           onSubmit={handleAnalyze}
         />
 
+        <label className="mt-6 flex items-start gap-3 text-sm text-white/65">
+          <input type="checkbox" checked={includeInterpretation} disabled={loading} onChange={(event) => setIncludeInterpretation(event.target.checked)} className="mt-1" />
+          <span>Include AI interpretation (pilot). When activated, selected public-page text is sent to the configured AI provider (Google Gemini for this pilot) to suggest improvements. Google may use free-tier content to improve its products. Use public, non-confidential pages only. Suggestions require your review.</span>
+        </label>
+
         {loading && (
           <div
             className="mt-12 space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-8"
@@ -85,7 +91,7 @@ export default function HowAiSeesYouPage() {
               <div className="h-full w-1/3 animate-pulse rounded-full bg-[#D4AF37]" />
             </div>
             <p className="text-sm text-white/50">
-              Reading your public page and building your business understanding
+              Discovering public pages and building your business understanding
               report…
             </p>
           </div>
@@ -126,7 +132,7 @@ export default function HowAiSeesYouPage() {
       <footer className="border-t border-white/10">
         <div className="mx-auto max-w-6xl px-6 py-8 sm:px-10">
           <p className="text-center text-xs text-white/30">
-            Based on the requested page&apos;s HTML only. Findings are limited to
+            Based on the public HTML pages reported in crawl coverage. Findings are limited to
             AiEON&apos;s current checks. No frontier AI comparison has been run.
           </p>
         </div>

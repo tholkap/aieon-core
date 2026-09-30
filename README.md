@@ -1,5 +1,15 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Website crawl development limit
+
+Discovery follows same-origin links and XML sitemaps, then combines observations
+from the pages it can read. It defaults to a maximum of 25 attempted pages per
+scan. During development, set `AIEON_CRAWL_PAGE_LIMIT` to an integer from 1 to 25
+to use a smaller bound. Reports disclose discovered, attempted, scanned, failed,
+and unscanned page counts; the limit is intentionally isolated so a future
+whole-site collector can replace the operational bound without changing the
+evidence model.
+
 ## Getting Started
 
 First, run the development server:

@@ -6,12 +6,14 @@ export default function ReadinessSummary({ report }: { report: AiUnderstandingRe
       <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#D4AF37]">Scope of this report</p>
       <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">What was checked</h2>
       <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/65">
-        Identity, offering descriptions, and customer action wording: {report.stats.assessed} of six questions.
-        Audience, trust, and differentiation are not assessed yet.
+        Identity, offering descriptions, audience, and customer action wording: {report.stats.assessed} of six questions.
+        Trust and differentiation are not assessed by the deterministic engine yet.
       </p>
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/55">
-        This scan reads the requested page&apos;s HTML, without running the website&apos;s JavaScript
-        or visiting other pages. The current offering rules cover limited English descriptions.
+        {report.coverage
+          ? `This scan read HTML from ${report.coverage.pagesScanned} public pages listed in crawl coverage.`
+          : "This scan read the requested page's HTML."}{" "}
+        It did not run the website&apos;s JavaScript. The current offering rules cover limited English descriptions.
         A signal not identified here may still exist elsewhere on your site or fall outside these checks.
       </p>
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-white/55">

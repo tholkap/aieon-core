@@ -1,12 +1,15 @@
+import { checkDeliveryConsistency, type DeliveryConsistencyResult } from "@/src/consistency/DeliveryConsistency";
 import { mapDiscoveryToBusinessProfile, type BusinessQuestion } from "@/components/discovery/mapBusinessProfile";
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
+import type { CrawlCoverage } from "@/src/core/discovery/WebsiteCrawler";
 
 export interface BlindSpot { id: string; title: string; impact: string; question: string }
 export interface Recommendation {
   id: string; title: string; description: string; relatedQuestion: string;
 }
 export interface AiUnderstandingReport {
+  interpretation?: import("@/src/interpretation/types").InterpretationResult;
   websiteUrl: string;
   scannedAt: string;
   brandName: string | null;
@@ -16,6 +19,8 @@ export interface AiUnderstandingReport {
   blindSpots: BlindSpot[];
   recommendations: Recommendation[];
   stats: { clear: number; partial: number; missing: number; notAssessed: number; assessed: number };
+  coverage?: CrawlCoverage;
+  deliveryConsistency?: DeliveryConsistencyResult;
 }
 
 const REVIEW_COPY: Record<string, { title: string; impact: string; improvement: string }> = {
@@ -29,6 +34,11 @@ const REVIEW_COPY: Record<string, { title: string; impact: string; improvement: 
     impact: "AiEON found limited offering evidence. A product name or slogan alone does not explain what a business provides.",
     improvement: "Review the quoted offering evidence. If your homepage lacks a clear product or service description, add one and reflect it in the page description. Rescan to check whether AiEON identifies the change; identical wording is not required for good communication.",
   },
+  audience: {
+    title: "Audience description needs review",
+    impact: "AiEON did not find a clear audience statement using its current English wording checks across the scanned content. This can be a coverage limitation.",
+    improvement: "Review who your offering is intended for. If that is not stated, add an accurate audience sentence near the offering description and rescan. Do not rewrite clear existing copy just to match AiEON.",
+  },
   action: {
     title: "Customer actions need review",
     impact: "No explicit action wording was identified in the buttons, navigation, and footer checked. Other links are not covered by this check yet.",
@@ -36,7 +46,7 @@ const REVIEW_COPY: Record<string, { title: string; impact: string; improvement: 
   },
 };
 
-export function mapDiscoveryToAiUnderstanding(url: string, observations: Observation[], identity: ResolvedIdentity): AiUnderstandingReport {
+export function mapDiscoveryToAiUnderstanding(url: string, observations: Observation[], identity: ResolvedIdentity, coverage?: CrawlCoverage): AiUnderstandingReport {
   const base = mapDiscoveryToBusinessProfile(url, observations, identity);
   const assessed = base.questions.filter((q) => q.assessment !== "not-assessed");
   const stats = {
@@ -47,23 +57,41 @@ export function mapDiscoveryToAiUnderstanding(url: string, observations: Observa
     assessed: assessed.length,
   };
   const reviews = assessed.filter((q) => q.status !== "found");
+  const reviewCopy = (q: BusinessQuestion) => {
+    if (q.id === "what" && q.status === "partial" && q.sources?.some(s =>
+      ["meta-description", "paragraph", "h1"].includes(s.sourceType) && s.quote === q.summary)) {
+      return {
+        title: "Offering description found; assessment remains partial",
+        impact: "AiEON extracted an offering description. Its current matching rules did not fully corroborate it; this is not evidence that your offering is unclear or missing.",
+        improvement: "Compare the quoted description with your actual catalog and the pages included in crawl coverage. Keep accurate existing copy. Correct a mismatch only if you confirm one; AiEON has not established a missing description or a contradiction.",
+      };
+    }
+    if (q.id === "audience" && q.status === "partial") return {
+      title: "Audience context found; interpretation needs review",
+      impact: "The checked content names a use setting or intended recipient. This is a contextual clue, not a verified customer segment.",
+      improvement: "Review the quoted use setting or recipient wording against your intended customers. Keep it if accurate; add detail only if it would help a customer choose. AiEON has not established that audience information is absent.",
+    };
+    return REVIEW_COPY[q.id];
+  };
   const who = base.questions.find((q) => q.id === "who");
   const brandName = who?.status === "found" ? who.summary : null;
   return {
     ...base,
     brandName,
     summaryHeadline: brandName ? `What AiEON found about ${brandName}` : "What AiEON found on this page",
-    summaryBody: `AiEON checked ${stats.assessed} of six business questions using the page content it could extract. ${stats.clear} returned supported signals; ${stats.partial + stats.missing} need review. The remaining ${stats.notAssessed} questions are not assessed yet. This report does not test ChatGPT, Gemini, Claude, or their recommendations.`,
+    summaryBody: `AiEON checked ${stats.assessed} of six business questions using the ${coverage ? `${coverage.pagesScanned} public pages` : "page"} it could extract. ${stats.clear} returned supported signals; ${stats.partial + stats.missing} need review. The remaining ${stats.notAssessed} questions are not assessed yet. This report does not test ChatGPT, Gemini, Claude, or their recommendations.`,
+    coverage,
+    deliveryConsistency: checkDeliveryConsistency(observations),
     stats,
     blindSpots: reviews.map((q) => ({
       id: q.id, question: q.question,
-      title: REVIEW_COPY[q.id]?.title ?? q.question,
-      impact: REVIEW_COPY[q.id]?.impact ?? "Review the available evidence.",
+      title: reviewCopy(q)?.title ?? q.question,
+      impact: reviewCopy(q)?.impact ?? "Review the available evidence.",
     })),
     recommendations: reviews.map((q) => ({
       id: `rec-${q.id}`, relatedQuestion: q.question,
-      title: REVIEW_COPY[q.id]?.title ?? q.question,
-      description: REVIEW_COPY[q.id]?.improvement ?? "Review the available evidence before editing your website.",
+      title: reviewCopy(q)?.title ?? q.question,
+      description: `${reviewCopy(q)?.improvement ?? "Review the available evidence before editing your website."}${q.sources?.[0] ? ` Evidence to review: “${q.sources[0].quote.slice(0, 180)}” (${q.sources[0].pageUrl}).` : " No supporting excerpt was identified within the scanned coverage."}`,
     })),
   };
 }

@@ -3,6 +3,7 @@ import { createQuestionEngineContext } from "@/src/questions/shared/QuestionEngi
 import { mapAnalysisToBusinessQuestion } from "@/src/questions/shared/QuestionMapper";
 import { whoAreTheyQuestionEngine } from "@/src/questions/who-are-they/WhoAreTheyQuestionEngine";
 import { whatDoTheyOfferQuestionEngine } from "@/src/questions/what-do-they-offer/WhatDoTheyOfferQuestionEngine";
+import { whoDoTheyHelpQuestionEngine } from "@/src/questions/who-do-they-help/WhoDoTheyHelpQuestionEngine";
 import type { Observation } from "@/src/types/observation";
 import type { ResolvedIdentity } from "@/src/types/resolved-identity";
 
@@ -58,7 +59,7 @@ function buildWhatToDoNext(observations: Observation[]): BusinessQuestion {
 
 export function mapDiscoveryToBusinessProfile(url: string, observations: Observation[], identity: ResolvedIdentity): BusinessProfile {
   const context = createQuestionEngineContext(observations, identity);
-  const questions: BusinessQuestion[] = [whoAreTheyQuestionEngine, whatDoTheyOfferQuestionEngine].map((engine) => {
+  const questions: BusinessQuestion[] = [whoAreTheyQuestionEngine, whatDoTheyOfferQuestionEngine, whoDoTheyHelpQuestionEngine].map((engine) => {
     const analysis = engine.analyze(context);
     const ids = new Set(analysis.evidence.map((e) => e.observationId));
     return {
@@ -71,7 +72,6 @@ export function mapDiscoveryToBusinessProfile(url: string, observations: Observa
     scannedAt: observations[0]?.discoveredAt ?? new Date().toISOString(),
     questions: [
       ...questions,
-      notAssessed("audience", "Who do they help?", "Who you help"),
       notAssessed("trust", "Why trust them?", "Why trust you"),
       notAssessed("choose", "Why choose them?", "Why choose you"),
       buildWhatToDoNext(observations),
